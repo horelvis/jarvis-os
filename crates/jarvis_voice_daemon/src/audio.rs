@@ -13,7 +13,7 @@ use anyhow::{Context, Result, anyhow};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{
     HeapRb,
-    traits::{Consumer, Producer, Split},
+    traits::{Consumer, Observer, Producer, Split},
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,8 +24,17 @@ use tokio::sync::mpsc;
 pub const CHUNK_SAMPLES: usize = 800;
 pub const SAMPLE_RATE: u32 = 16_000;
 
-/// Capacidad del ringbuf de playback: 16kHz × 2s = 32000 samples (~64KB).
-const PLAYBACK_BUFFER_SAMPLES: usize = 32_000;
+/// Capacidad del ringbuf de playback. Generoso a propósito: ~2s a
+/// 48kHz stereo (192k samples = ~384 KB). Evita que un burst del
+/// agent (varios chunks llegando juntos por jitter de red) se coma
+/// nuestro buffer y nos deje sin nada que reproducir entre paquetes.
+const PLAYBACK_BUFFER_SAMPLES: usize = 192_000;
+
+/// Cuántos samples como mínimo deben acumularse antes de que el
+/// callback del speaker empiece a reproducir. Sin esto, el callback
+/// arrancaba en cuanto había 1 sample y cualquier gap de red se oía
+/// como silencio entre paquetes. ~150 ms de cushion.
+const PLAYBACK_PREROLL_SAMPLES: usize = 7_200; // 150ms @ 48kHz mono
 
 pub struct AudioIo {
     pub mic_rx: mpsc::Receiver<Vec<i16>>,
@@ -259,6 +268,13 @@ fn build_output_stream(
         let mut prev: i16 = 0;
         let mut frac: f32 = 0.0;
 
+        // Push con espera bounded inline más abajo: si el ringbuf está
+        // lleno, dormimos 500us por intento, hasta 10_000 intentos
+        // (5s) — pasado eso descartamos el sample (callback parece
+        // muerto). Antes hacíamos `break` que perdía samples a la
+        // mínima saturación y producía cortes audibles.
+        const MAX_PUSH_RETRIES: u32 = 10_000;
+
         loop {
             let cmd = match cmd_rx.blocking_recv() {
                 Some(c) => c,
@@ -274,13 +290,19 @@ fn build_output_stream(
                     // Interpolación lineal entre prev y cur.
                     let interp = prev as f32 * (1.0 - idx_f) + cur as f32 * idx_f;
                     let sample = interp as i16;
-                    // Duplicar a todos los canales del device.
+                    // Duplicar a todos los canales del device, esperando
+                    // si el ringbuf está full.
                     for _ in 0..device_channels {
-                        if prod.try_push(sample).is_err() {
-                            // Ringbuf lleno → caemos al callback que
-                            // probablemente se está saltando frames; loseamos
-                            // este sample.
-                            break;
+                        let mut pushed = false;
+                        for _ in 0..MAX_PUSH_RETRIES {
+                            if prod.try_push(sample).is_ok() {
+                                pushed = true;
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_micros(500));
+                        }
+                        if !pushed {
+                            tracing::warn!("audio.playback_push_dropped");
                         }
                     }
                     idx_f += ratio_in_per_out;
@@ -294,17 +316,43 @@ fn build_output_stream(
     });
 
     let err_fn = |e| tracing::warn!(error = %e, "audio.output_error");
+
+    // Estado de preroll: el callback no consume hasta que el ringbuf
+    // tenga al menos PLAYBACK_PREROLL_SAMPLES, así absorbemos el
+    // jitter de red entre chunks. Vuelve al estado "buffering" si el
+    // ringbuf se vacía.
+    let buffering = Arc::new(AtomicBool::new(true));
+    let buffering_f32 = buffering.clone();
+    let buffering_i16 = buffering.clone();
+    let flush_flag_f32 = flush_flag.clone();
+    let flush_flag_i16 = flush_flag.clone();
+
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => device.build_output_stream(
             &stream_config,
             move |out: &mut [f32], _| {
-                if flush_flag.swap(false, Ordering::AcqRel) {
+                if flush_flag_f32.swap(false, Ordering::AcqRel) {
                     drain_ringbuf(&mut cons);
+                    buffering_f32.store(true, Ordering::Release);
+                }
+                if buffering_f32.load(Ordering::Acquire) {
+                    if cons.occupied_len() >= PLAYBACK_PREROLL_SAMPLES {
+                        buffering_f32.store(false, Ordering::Release);
+                    } else {
+                        for slot in out.iter_mut() {
+                            *slot = 0.0;
+                        }
+                        return;
+                    }
                 }
                 for slot in out.iter_mut() {
                     *slot = match cons.try_pop() {
                         Some(s) => s as f32 / i16::MAX as f32,
-                        None => 0.0,
+                        None => {
+                            // Underrun → vuelve a buffering y emite silencio.
+                            buffering_f32.store(true, Ordering::Release);
+                            0.0
+                        }
                     };
                 }
             },
@@ -314,11 +362,28 @@ fn build_output_stream(
         cpal::SampleFormat::I16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [i16], _| {
-                if flush_flag.swap(false, Ordering::AcqRel) {
+                if flush_flag_i16.swap(false, Ordering::AcqRel) {
                     drain_ringbuf(&mut cons);
+                    buffering_i16.store(true, Ordering::Release);
+                }
+                if buffering_i16.load(Ordering::Acquire) {
+                    if cons.occupied_len() >= PLAYBACK_PREROLL_SAMPLES {
+                        buffering_i16.store(false, Ordering::Release);
+                    } else {
+                        for slot in out.iter_mut() {
+                            *slot = 0;
+                        }
+                        return;
+                    }
                 }
                 for slot in out.iter_mut() {
-                    *slot = cons.try_pop().unwrap_or(0);
+                    *slot = match cons.try_pop() {
+                        Some(s) => s,
+                        None => {
+                            buffering_i16.store(true, Ordering::Release);
+                            0
+                        }
+                    };
                 }
             },
             err_fn,
