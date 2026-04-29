@@ -48,29 +48,31 @@ log "Branch: $(cd "$JARVIS_OS_DIR" && git branch --show-current 2>/dev/null || e
 
 log "Compilando crates Rust (cargo decide qué rebuild)..."
 cd "$JARVIS_OS_DIR"
-cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
+cargo build --release --bin ironclaw --bin jarvis-linux-mcp
 
 ##############################################
 # Step 2: Reinstala binarios                 #
 ##############################################
 
-# Compara hash; reinstala solo si difiere para evitar restarts innecesarios.
-NEW_BIN="$JARVIS_OS_DIR/target/release/jarvis-linux-mcp"
-DST_BIN="/usr/local/bin/jarvis-linux-mcp"
+# Compara hash por binario; reinstala solo si difiere para evitar restarts innecesarios.
+for bin in ironclaw jarvis-linux-mcp; do
+    NEW_BIN="$JARVIS_OS_DIR/target/release/$bin"
+    DST_BIN="/usr/local/bin/$bin"
 
-if [ ! -f "$NEW_BIN" ]; then
-    fail "Compilación no produjo $NEW_BIN."
-fi
+    if [ ! -f "$NEW_BIN" ]; then
+        fail "Compilación no produjo $NEW_BIN."
+    fi
 
-NEW_HASH=$(sha256sum "$NEW_BIN" | awk '{print $1}')
-DST_HASH=$(sudo sha256sum "$DST_BIN" 2>/dev/null | awk '{print $1}' || echo "absent")
+    NEW_HASH=$(sha256sum "$NEW_BIN" | awk '{print $1}')
+    DST_HASH=$(sudo sha256sum "$DST_BIN" 2>/dev/null | awk '{print $1}' || echo "absent")
 
-if [ "$NEW_HASH" != "$DST_HASH" ]; then
-    log "jarvis-linux-mcp cambió ($NEW_HASH != $DST_HASH); reinstalando..."
-    sudo install -Dm755 "$NEW_BIN" "$DST_BIN"
-else
-    log "jarvis-linux-mcp sin cambios (sha256 idéntico); skip."
-fi
+    if [ "$NEW_HASH" != "$DST_HASH" ]; then
+        log "$bin cambió ($NEW_HASH != $DST_HASH); reinstalando..."
+        sudo install -Dm755 "$NEW_BIN" "$DST_BIN"
+    else
+        log "$bin sin cambios (sha256 idéntico); skip."
+    fi
+done
 
 # jarvis-chat wrapper.
 sudo install -Dm755 "$JARVIS_OS_DIR/arch/scripts/jarvis-chat" /usr/local/bin/jarvis-chat

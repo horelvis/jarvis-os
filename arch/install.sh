@@ -84,17 +84,19 @@ if [ ! -d "$HOME/dots-hyprland" ]; then
 fi
 
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
-log "Compilando jarvis_linux_mcp (release)..."
-cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
+log "Compilando ironclaw + jarvis_linux_mcp (release)..."
+log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
+cargo build --release --bin ironclaw --bin jarvis-linux-mcp
 
-if [ -f "$JARVIS_OS_DIR/target/release/jarvis-linux-mcp" ]; then
-    sudo install -Dm755 \
-        "$JARVIS_OS_DIR/target/release/jarvis-linux-mcp" \
-        /usr/local/bin/jarvis-linux-mcp
-    log "jarvis-linux-mcp instalado en /usr/local/bin/"
-else
-    fail "Compilación de jarvis-linux-mcp no produjo binary."
-fi
+for bin in ironclaw jarvis-linux-mcp; do
+    src="$JARVIS_OS_DIR/target/release/$bin"
+    if [ -f "$src" ]; then
+        sudo install -Dm755 "$src" "/usr/local/bin/$bin"
+        log "$bin instalado en /usr/local/bin/"
+    else
+        fail "Compilación no produjo $src."
+    fi
+done
 
 # ─── Step 6: Wrapper jarvis-chat ───
 log "Instalando wrapper jarvis-chat..."
