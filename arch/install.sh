@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# arch/install.sh — bootstrap jarvis-os sobre Arch Linux instalado.
+#
+# PRECONDICIÓN: estás en una instalación Arch base recién hecha
+# (archinstall + reboot). Este script:
+#   1. Verifica que estás en Arch.
+#   2. Instala dependencias base + paru (AUR helper).
+#   3. Instala end-4 dots-hyprland (illogical-impulse) via su instalador upstream.
+#   4. Compila los crates Rust de jarvis-os (jarvis_linux_mcp).
+#   5. Instala binarios + systemd-user services.
+#   6. Configura wallpaper + secrets + ~/.ironclaw/.env.
+#   7. Configura snapper para snapshots Btrfs (rollback).
+#
+# USO:
+#   git clone <repo-jarvis-os> /opt/jarvis-os
+#   cd /opt/jarvis-os
+#   ./arch/install.sh
+#
+# El script es IDEMPOTENTE: re-ejecutarlo es seguro.
+
+set -euo pipefail
+
+JARVIS_OS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+JARVIS_VERSION="0.20.0"
+LOG_FILE="/tmp/jarvis-os-install.log"
+
+# ─── Logging ───
+log()  { printf '\033[36m[jarvis-os]\033[0m %s\n' "$*" | tee -a "$LOG_FILE"; }
+warn() { printf '\033[33m[jarvis-os] WARN:\033[0m %s\n' "$*" | tee -a "$LOG_FILE"; }
+fail() { printf '\033[31m[jarvis-os] FAIL:\033[0m %s\n' "$*" | tee -a "$LOG_FILE" >&2; exit 1; }
+
+# ─── Verificación previa ───
+[ -f /etc/arch-release ] || fail "No estás en Arch Linux. /etc/arch-release no existe."
+[ "$EUID" -ne 0 ] || fail "Este script NO debe correrse como root. sudo se invoca puntualmente."
+command -v sudo >/dev/null 2>&1 || fail "sudo no está disponible."
+
+log "jarvis-os $JARVIS_VERSION install iniciado en $(date -Iseconds)"
+log "JARVIS_OS_DIR = $JARVIS_OS_DIR"
+
+# ─── Step 1: Dependencias base ───
+log "Instalando dependencias pacman base..."
+sudo pacman -Syu --noconfirm --needed \
+  base-devel git curl wget \
+  rustup \
+  openssh networkmanager bluez bluez-utils \
+  pipewire pipewire-pulse pipewire-alsa wireplumber \
+  noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-fira-code \
+  hyprland hyprpaper hypridle hyprlock \
+  foot wofi grim slurp wl-clipboard \
+  jq ripgrep htop \
+  btrfs-progs snapper \
+  python python-pip \
+  base-devel cmake pkgconf
+
+# ─── Step 2: Rust toolchain ───
+if ! command -v cargo >/dev/null 2>&1; then
+    log "Instalando Rust toolchain via rustup..."
+    rustup default stable
+fi
+
+# ─── Step 3: paru (AUR helper) ───
+if ! command -v paru >/dev/null 2>&1; then
+    log "Instalando paru (AUR helper)..."
+    cd /tmp
+    git clone https://aur.archlinux.org/paru.git
+    cd paru && makepkg -si --noconfirm
+    cd "$JARVIS_OS_DIR"
+fi
+
+# ─── Step 4: end-4 dots-hyprland (illogical-impulse) ───
+# Lo instalamos solo si NO está ya presente (idempotencia).
+if [ ! -d "$HOME/dots-hyprland" ]; then
+    log "Instalando illogical-impulse desde end-4/dots-hyprland..."
+    git clone --depth 1 https://github.com/end-4/dots-hyprland "$HOME/dots-hyprland"
+    cd "$HOME/dots-hyprland"
+    # Su instalador es interactivo — para automatización, lo correremos
+    # manualmente con el primer boot. Aquí solo pre-clonamos.
+    log "Repositorio dots-hyprland clonado en ~/dots-hyprland"
+    log "Ejecuta '~/dots-hyprland/setup install' DESPUÉS de este script para completar."
+    cd "$JARVIS_OS_DIR"
+fi
+
+# ─── Step 5: Compilar binarios Rust de jarvis-os ───
+log "Compilando jarvis_linux_mcp (release)..."
+cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
+
+if [ -f "$JARVIS_OS_DIR/target/release/jarvis-linux-mcp" ]; then
+    sudo install -Dm755 \
+        "$JARVIS_OS_DIR/target/release/jarvis-linux-mcp" \
+        /usr/local/bin/jarvis-linux-mcp
+    log "jarvis-linux-mcp instalado en /usr/local/bin/"
+else
+    fail "Compilación de jarvis-linux-mcp no produjo binary."
+fi
+
+# ─── Step 6: Wrapper jarvis-chat ───
+log "Instalando wrapper jarvis-chat..."
+sudo install -Dm755 "$JARVIS_OS_DIR/arch/scripts/jarvis-chat" /usr/local/bin/jarvis-chat
+
+# ─── Step 7: Wallpaper jarvis-os ───
+log "Copiando wallpaper a ~/Pictures/jarvis-os/..."
+mkdir -p "$HOME/Pictures/jarvis-os"
+cp "$JARVIS_OS_DIR/assets/wallpaper.jpg" "$HOME/Pictures/jarvis-os/wallpaper.jpg"
+
+# ─── Step 8: Snapper para rollback Btrfs ───
+if findmnt -no FSTYPE / | grep -q btrfs; then
+    if ! sudo snapper -c root list >/dev/null 2>&1; then
+        log "Configurando snapper para snapshots root Btrfs..."
+        sudo snapper -c root create-config /
+        sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+        # grub-btrfs para entries de boot por snapshot
+        paru -S --noconfirm --needed grub-btrfs
+        sudo systemctl enable --now grub-btrfsd.service
+    fi
+fi
+
+# ─── Step 9: SystemD user units ───
+log "Instalando systemd-user units..."
+mkdir -p "$HOME/.config/systemd/user"
+for unit in "$JARVIS_OS_DIR/arch/systemd-user/"*.service; do
+    if [ -f "$unit" ]; then
+        cp "$unit" "$HOME/.config/systemd/user/"
+        log "  $(basename "$unit")"
+    fi
+done
+systemctl --user daemon-reload || true
+
+# ─── Step 10: ~/.ironclaw/.env stateless defaults ───
+log "Configurando ~/.ironclaw/ defaults..."
+mkdir -p "$HOME/.ironclaw"
+if [ ! -f "$HOME/.ironclaw/.env" ]; then
+    cat > "$HOME/.ironclaw/.env" <<'EOF'
+DATABASE_BACKEND=libsql
+LIBSQL_PATH=/home/jarvis/.ironclaw/jarvis.db
+DATABASE_URL=unused://libsql
+AGENT_NAME=jarvis
+HEARTBEAT_ENABLED=false
+IRONCLAW_PROFILE=local
+# API keys del operador deben ir aquí (Anthropic, ElevenLabs):
+# ANTHROPIC_API_KEY=...
+# ELEVENLABS_API_KEY=...
+EOF
+    log "Plantilla creada en ~/.ironclaw/.env. Edita las API keys antes de usar."
+fi
+
+log "═══════════════════════════════════════════════════"
+log "jarvis-os $JARVIS_VERSION instalado correctamente."
+log ""
+log "PRÓXIMOS PASOS MANUALES:"
+log "  1. cd ~/dots-hyprland && ./setup install"
+log "     (instala el shell illogical-impulse interactivamente)"
+log "  2. Edita ~/.ironclaw/.env con tus API keys reales."
+log "  3. systemctl --user enable --now jarvis-mcp-register.service"
+log "  4. logout / login para entrar a Hyprland + jarvis-os"
+log "  5. ironclaw mcp test jarvis-linux  # verifica las 8 tools"
+log "  6. jarvis-chat run                  # primera conversación"
+log "═══════════════════════════════════════════════════"

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# jarvis-chat — wrapper para arrancar IronClaw con env jarvis-os.
+#
+# - Sourcea ~/.ironclaw/.env (API keys + LLM provider).
+# - Setea defaults stateless (libSQL en /tmp si .env no los define).
+# - Exec ironclaw con cualquier argumento que pases.
+#
+# Uso:
+#   jarvis-chat run                  # REPL TUI interactivo
+#   jarvis-chat mcp list             # lista MCP servers registrados
+#   jarvis-chat mcp test jarvis-linux
+
+set -euo pipefail
+
+if [ -r "$HOME/.ironclaw/.env" ]; then
+  set -o allexport
+  # shellcheck disable=SC1091
+  source "$HOME/.ironclaw/.env"
+  set +o allexport
+fi
+
+: "${IRONCLAW_HOME:=$HOME/.ironclaw}"
+: "${DATABASE_BACKEND:=libsql}"
+: "${LIBSQL_PATH:=$IRONCLAW_HOME/jarvis.db}"
+: "${DATABASE_URL:=unused://libsql}"
+: "${AGENT_NAME:=jarvis}"
+: "${HEARTBEAT_ENABLED:=false}"
+: "${IRONCLAW_PROFILE:=local}"
+
+mkdir -p "$IRONCLAW_HOME"
+
+export IRONCLAW_HOME DATABASE_BACKEND LIBSQL_PATH DATABASE_URL \
+       AGENT_NAME HEARTBEAT_ENABLED IRONCLAW_PROFILE
+
+exec ironclaw "$@"
