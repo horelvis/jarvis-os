@@ -124,6 +124,14 @@ if command -v matugen >/dev/null 2>&1; then
     log "  matugen regeneró la paleta Material You"
 fi
 
+# ─── Step 7a: PipeWire echo-cancel para barge-in real en jarvis-voice-daemon ───
+log "Instalando módulo PipeWire echo-cancel..."
+mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
+cp "$JARVIS_OS_DIR/arch/configs/pipewire/echo-cancel.conf" \
+    "$HOME/.config/pipewire/pipewire.conf.d/jarvis-echo-cancel.conf"
+systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || \
+    warn "No se pudo reiniciar PipeWire (¿no estás en sesión user?). Reinicia sesión y verifica con 'pactl list short sources | grep jarvis-mic-aec'."
+
 # ─── Step 7b: Overrides Hyprland (append idempotente) ───
 # end-4 NO carga custom/*.conf (glob); solo carga nombres específicos
 # (env/variables/execs/general/rules/keybinds). Appendamos a cada uno

@@ -88,6 +88,19 @@ sudo install -Dm755 "$JARVIS_OS_DIR/arch/scripts/jarvis-chat" /usr/local/bin/jar
 # v20.0 deja la estructura preparada pero VACÍA — se irá llenando cuando
 # necesitemos overrides puntuales (por ejemplo el patch del finger-count).
 
+# PipeWire echo-cancel (sólo reinicia PipeWire si la config cambió).
+if [ -f "$JARVIS_OS_DIR/arch/configs/pipewire/echo-cancel.conf" ]; then
+    PW_DST="$HOME/.config/pipewire/pipewire.conf.d/jarvis-echo-cancel.conf"
+    PW_SRC="$JARVIS_OS_DIR/arch/configs/pipewire/echo-cancel.conf"
+    mkdir -p "$(dirname "$PW_DST")"
+    if [ ! -f "$PW_DST" ] || ! cmp -s "$PW_SRC" "$PW_DST"; then
+        cp "$PW_SRC" "$PW_DST"
+        log "PipeWire echo-cancel actualizado; reiniciando PipeWire..."
+        systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || \
+            warn "Reinicio PipeWire falló (¿no en sesión user?)"
+    fi
+fi
+
 if [ -d "$JARVIS_OS_DIR/arch/configs/hyprland" ]; then
     log "Sincronizando overrides de Hyprland (append idempotente)..."
     mkdir -p "$HOME/.config/hypr/custom"
