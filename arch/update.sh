@@ -116,10 +116,29 @@ fi
 
 # Wallpaper jarvis-os: solo refresca si cambió en el repo.
 mkdir -p "$HOME/Pictures/jarvis-os"
-if [ "$JARVIS_OS_DIR/assets/wallpaper.jpg" -nt "$HOME/Pictures/jarvis-os/wallpaper.jpg" ] \
-   || [ ! -f "$HOME/Pictures/jarvis-os/wallpaper.jpg" ]; then
-    cp "$JARVIS_OS_DIR/assets/wallpaper.jpg" "$HOME/Pictures/jarvis-os/wallpaper.jpg"
+WALLPAPER_PATH="$HOME/Pictures/jarvis-os/wallpaper.jpg"
+WALLPAPER_CHANGED=false
+if [ "$JARVIS_OS_DIR/assets/wallpaper.jpg" -nt "$WALLPAPER_PATH" ] \
+   || [ ! -f "$WALLPAPER_PATH" ]; then
+    cp "$JARVIS_OS_DIR/assets/wallpaper.jpg" "$WALLPAPER_PATH"
     log "Wallpaper actualizado."
+    WALLPAPER_CHANGED=true
+fi
+
+# Asegura que Quickshell apunta al wallpaper de jarvis-os (idempotente).
+QS_WALL_DIR="$HOME/.local/state/quickshell/user/generated/wallpaper"
+mkdir -p "$QS_WALL_DIR"
+QS_WALL_FILE="$QS_WALL_DIR/path.txt"
+if [ "$(cat "$QS_WALL_FILE" 2>/dev/null)" != "$WALLPAPER_PATH" ]; then
+    echo "$WALLPAPER_PATH" > "$QS_WALL_FILE"
+    log "Quickshell wallpaper state apuntando a $WALLPAPER_PATH."
+    WALLPAPER_CHANGED=true
+fi
+
+if [ "$WALLPAPER_CHANGED" = "true" ] && command -v matugen >/dev/null 2>&1; then
+    matugen image "$WALLPAPER_PATH" >/dev/null 2>&1 || \
+        warn "matugen image falló (paleta Material You no regenerada)"
+    log "matugen regeneró la paleta Material You."
 fi
 
 ##############################################

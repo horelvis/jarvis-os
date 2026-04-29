@@ -108,6 +108,20 @@ log "Copiando wallpaper a ~/Pictures/jarvis-os/..."
 mkdir -p "$HOME/Pictures/jarvis-os"
 cp "$JARVIS_OS_DIR/assets/wallpaper.jpg" "$HOME/Pictures/jarvis-os/wallpaper.jpg"
 
+# Setea wallpaper en el state de Quickshell (illogical-impulse lo lee
+# de path.txt para renderizar). Y regenera la paleta Material You.
+WALLPAPER_PATH="$HOME/Pictures/jarvis-os/wallpaper.jpg"
+QS_WALL_DIR="$HOME/.local/state/quickshell/user/generated/wallpaper"
+mkdir -p "$QS_WALL_DIR"
+echo "$WALLPAPER_PATH" > "$QS_WALL_DIR/path.txt"
+log "  Quickshell wallpaper state apuntando a $WALLPAPER_PATH"
+
+if command -v matugen >/dev/null 2>&1; then
+    matugen image "$WALLPAPER_PATH" >/dev/null 2>&1 || \
+        warn "matugen image falló (paleta Material You no regenerada)"
+    log "  matugen regeneró la paleta Material You"
+fi
+
 # ─── Step 7b: Overrides Hyprland (append idempotente) ───
 # end-4 NO carga custom/*.conf (glob); solo carga nombres específicos
 # (env/variables/execs/general/rules/keybinds). Appendamos a cada uno
