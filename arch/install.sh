@@ -86,7 +86,8 @@ fi
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
 log "Compilando ironclaw + jarvis_linux_mcp (release)..."
 log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
-cargo build --release --bin ironclaw --bin jarvis-linux-mcp
+cargo build --release --bin ironclaw
+cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
 
 for bin in ironclaw jarvis-linux-mcp; do
     src="$JARVIS_OS_DIR/target/release/$bin"

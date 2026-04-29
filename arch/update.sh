@@ -48,7 +48,8 @@ log "Branch: $(cd "$JARVIS_OS_DIR" && git branch --show-current 2>/dev/null || e
 
 log "Compilando crates Rust (cargo decide qué rebuild)..."
 cd "$JARVIS_OS_DIR"
-cargo build --release --bin ironclaw --bin jarvis-linux-mcp
+cargo build --release --bin ironclaw
+cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
 
 ##############################################
 # Step 2: Reinstala binarios                 #
