@@ -63,9 +63,10 @@ fi
 # ─── Step 3: paru (AUR helper) ───
 if ! command -v paru >/dev/null 2>&1; then
     log "Instalando paru (AUR helper)..."
-    cd /tmp
-    git clone https://aur.archlinux.org/paru.git
-    cd paru && makepkg -si --noconfirm
+    # Limpia restos de runs anteriores fallidos (idempotencia).
+    rm -rf /tmp/paru
+    git clone https://aur.archlinux.org/paru.git /tmp/paru
+    cd /tmp/paru && makepkg -si --noconfirm
     cd "$JARVIS_OS_DIR"
 fi
 
