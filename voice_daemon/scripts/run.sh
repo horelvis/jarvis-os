@@ -34,6 +34,10 @@ uv run voice-daemon 2>&1 | tee "$LOG_FILE" | \
             "[33m⊘ aborted: no speech[0m"
         elif .event == "transcribe.failed" then
             "[31m✗ transcribe failed: \(.error)[0m"
+        elif .event == "wakeword.score_max" then
+            "[90m  wake score_max=\(.score_max) (threshold=\(.threshold))[0m"
+        elif .event == "audio.queue_full_dropping" then
+            "[33m⚠ audio queue full, dropped=\(.total_dropped)[0m"
         elif .event | startswith("daemon.") then
             "[90m· \(.event)[0m"
         elif .event | startswith("pipeline.") then

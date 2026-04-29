@@ -44,12 +44,16 @@ class WakeWordDetector:
         threshold: float = 0.5,
         sample_rate: int = 16000,
         inference_framework: str = "onnx",
+        debug_log_period_s: float = 1.0,
     ) -> None:
         self.model_name = model_name
         self.threshold = threshold
         self.sample_rate = sample_rate
         self.inference_framework = inference_framework
+        self.debug_log_period_s = debug_log_period_s
         self._model: Any = None
+        self._score_max_window: float = 0.0
+        self._next_debug_at: float = 0.0
 
     async def start(self) -> None:
         # Lazy import: onnxruntime + openwakeword pesan al importar.
@@ -87,6 +91,26 @@ class WakeWordDetector:
 
         scores = self._model.predict(chunk)
         score = float(scores.get(self.model_name, 0.0))
+
+        # Telemetría periódica del score máximo en la ventana — ayuda a
+        # calibrar threshold y diagnosticar "no responde a hey jarvis".
+        if score > self._score_max_window:
+            self._score_max_window = score
+        now = time.monotonic()
+        if self._next_debug_at == 0.0:
+            self._next_debug_at = now + self.debug_log_period_s
+        elif now >= self._next_debug_at:
+            # INFO (no DEBUG) para que aparezca con la config de logging
+            # actual. Quitar tras validar F1.3.b.
+            log.info(
+                "wakeword.score_max",
+                window_s=self.debug_log_period_s,
+                score_max=round(self._score_max_window, 3),
+                threshold=self.threshold,
+            )
+            self._score_max_window = 0.0
+            self._next_debug_at = now + self.debug_log_period_s
+
         if score >= self.threshold:
             return WakeEvent(
                 model_name=self.model_name,
