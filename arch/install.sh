@@ -108,6 +108,29 @@ log "Copiando wallpaper a ~/Pictures/jarvis-os/..."
 mkdir -p "$HOME/Pictures/jarvis-os"
 cp "$JARVIS_OS_DIR/assets/wallpaper.jpg" "$HOME/Pictures/jarvis-os/wallpaper.jpg"
 
+# ─── Step 7b: Overrides Hyprland (append idempotente) ───
+# end-4 NO carga custom/*.conf (glob); solo carga nombres específicos
+# (env/variables/execs/general/rules/keybinds). Appendamos a cada uno
+# con markers para que update.sh pueda regenerar el bloque.
+if [ -d "$JARVIS_OS_DIR/arch/configs/hyprland" ]; then
+    log "Aplicando overrides Hyprland..."
+    mkdir -p "$HOME/.config/hypr/custom"
+    for src in "$JARVIS_OS_DIR/arch/configs/hyprland/"*.conf; do
+        [ -f "$src" ] || continue
+        base=$(basename "$src")
+        dst="$HOME/.config/hypr/custom/$base"
+        [ -f "$dst" ] || touch "$dst"
+
+        sed -i \
+            -e '/# >>> jarvis-os: managed BEGIN/,/# <<< jarvis-os: managed END/d' \
+            -e '/# >>> jarvis-os overrides <<</,/# <<< jarvis-os overrides >>>/d' \
+            -e '/# >>> jarvis-os F1.5 inline confirm <<</,/# <<< jarvis-os F1.5 inline confirm >>>/d' \
+            "$dst"
+        cat "$src" >> "$dst"
+        log "  $base"
+    done
+fi
+
 # ─── Step 8: Snapper para rollback Btrfs ───
 if findmnt -no FSTYPE / | grep -q btrfs; then
     if ! sudo snapper -c root list >/dev/null 2>&1; then

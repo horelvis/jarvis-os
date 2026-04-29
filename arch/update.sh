@@ -88,10 +88,30 @@ sudo install -Dm755 "$JARVIS_OS_DIR/arch/scripts/jarvis-chat" /usr/local/bin/jar
 # necesitemos overrides puntuales (por ejemplo el patch del finger-count).
 
 if [ -d "$JARVIS_OS_DIR/arch/configs/hyprland" ]; then
-    log "Sincronizando overrides de Hyprland..."
+    log "Sincronizando overrides de Hyprland (append idempotente)..."
     mkdir -p "$HOME/.config/hypr/custom"
-    cp -u "$JARVIS_OS_DIR/arch/configs/hyprland/"*.conf \
-        "$HOME/.config/hypr/custom/" 2>/dev/null || true
+    # end-4/dots-hyprland NO carga custom/*.conf (glob); solo carga
+    # nombres específicos: env, variables, execs, general, rules,
+    # keybinds. Por eso appendamos al archivo existente con markers
+    # delimitando nuestro bloque, y reemplazamos en cada run.
+    for src in "$JARVIS_OS_DIR/arch/configs/hyprland/"*.conf; do
+        [ -f "$src" ] || continue
+        base=$(basename "$src")
+        dst="$HOME/.config/hypr/custom/$base"
+        [ -f "$dst" ] || touch "$dst"
+
+        # Limpia bloques previos (markers actuales y los heredados de
+        # iteraciones tempranas con otros nombres de marker).
+        sed -i \
+            -e '/# >>> jarvis-os: managed BEGIN/,/# <<< jarvis-os: managed END/d' \
+            -e '/# >>> jarvis-os overrides <<</,/# <<< jarvis-os overrides >>>/d' \
+            -e '/# >>> jarvis-os F1.5 inline confirm <<</,/# <<< jarvis-os F1.5 inline confirm >>>/d' \
+            "$dst"
+
+        # Append nuevo bloque (que ya viene marcado en el src).
+        cat "$src" >> "$dst"
+        log "  $base actualizado."
+    done
 fi
 
 # Wallpaper jarvis-os: solo refresca si cambió en el repo.
