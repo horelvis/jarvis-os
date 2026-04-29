@@ -1,15 +1,18 @@
 """Wake word detection vía openWakeWord.
 
-openWakeWord es un detector ligero CPU-only que evalúa frames de 80ms
-contra modelos pre-entrenados (built-in: "hey jarvis", "alexa", "ok google",
-etc.). Para custom wake words ("hey jarvis-os") se entrena un modelo propio
-en F1.3.b — por ahora usamos el built-in "hey_jarvis".
+openWakeWord mantiene su propio sliding window interno y acepta chunks
+de cualquier longitud (16-bit PCM mono 16kHz). Devuelve, en cada
+predict(), un dict de scores por modelo cargado.
+
+Usamos el modelo built-in `hey_jarvis`. Para custom wake words
+(`"hey jarvis-os"`) habría que entrenar uno propio — fuera de F1.3.b.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import time
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import structlog
@@ -22,17 +25,17 @@ class WakeEvent:
     """Evento emitido cuando se detecta la palabra de activación."""
 
     model_name: str
-    score: float  # 0..1; threshold típico 0.5
-    timestamp: float  # epoch seconds
+    score: float
+    timestamp: float
 
 
 class WakeWordDetector:
-    """Wrapper sobre openWakeWord, async-friendly.
+    """Wrapper sobre openWakeWord, con feed síncrono.
 
-    Uso:
-        detector = WakeWordDetector(model_name="hey_jarvis", threshold=0.5)
-        async for event in detector.stream(audio_chunks):
-            ...
+    El cooldown post-detección (evitar disparos múltiples sobre la
+    misma palabra) se aplica en el orquestador, no aquí: el orquestador
+    sabe cuándo el agente está en cooldown porque acaba de procesar
+    una utterance.
     """
 
     def __init__(
@@ -40,45 +43,58 @@ class WakeWordDetector:
         model_name: str = "hey_jarvis",
         threshold: float = 0.5,
         sample_rate: int = 16000,
+        inference_framework: str = "onnx",
     ) -> None:
         self.model_name = model_name
         self.threshold = threshold
         self.sample_rate = sample_rate
-        self._model = None  # cargado en start() para tardar menos en import
+        self.inference_framework = inference_framework
+        self._model: Any = None
 
     async def start(self) -> None:
-        """Carga el modelo. Llamar una vez antes de stream()."""
-        # Import perezoso: openwakeword arrastra onnx que tarda en importar.
-        # Sin esto, el arranque del daemon se siente lento aunque no se use.
+        # Lazy import: onnxruntime + openwakeword pesan al importar.
+        import openwakeword  # type: ignore[import-not-found]
         from openwakeword.model import Model  # type: ignore[import-not-found]
 
-        log.info("wakeword.loading", model=self.model_name)
-        self._model = Model(wakeword_models=[self.model_name])
-        log.info("wakeword.ready", model=self.model_name, threshold=self.threshold)
+        log.info("wakeword.downloading_models_if_needed")
+        # Descarga modelos pre-trained la primera vez (idempotente).
+        openwakeword.utils.download_models()
 
-    async def stream(
-        self, audio_chunks: AsyncIterator[np.ndarray]
-    ) -> AsyncIterator[WakeEvent]:
-        """Procesa chunks de audio (16kHz int16) y yield-ea WakeEvent
-        cuando supera el threshold.
+        log.info(
+            "wakeword.loading",
+            model=self.model_name,
+            framework=self.inference_framework,
+        )
+        self._model = Model(
+            wakeword_models=[self.model_name],
+            inference_framework=self.inference_framework,
+        )
+        log.info(
+            "wakeword.ready",
+            model=self.model_name,
+            threshold=self.threshold,
+        )
 
-        El cooldown post-detección (para evitar disparos múltiples sobre la
-        misma palabra) se maneja a nivel de pipeline orquestador, no aquí.
+    def feed(self, chunk: np.ndarray) -> WakeEvent | None:
+        """Pasa un chunk al detector. Devuelve WakeEvent si dispara.
+
+        openwakeword.Model.predict() acepta arrays int16 16kHz mono de
+        cualquier longitud y mantiene su propio sliding window de 80ms.
+        El score que devuelve se evalúa sobre la ventana actual.
         """
         if self._model is None:
-            raise RuntimeError("call start() before stream()")
+            raise RuntimeError("call start() before feed()")
 
-        # NOTA: scaffold F1.3 — la implementación real aún no consume audio.
-        # En F1.3.b cableamos `self._model.predict(chunk)` y emitimos el
-        # WakeEvent cuando score >= threshold.
-        async for _chunk in audio_chunks:
-            # placeholder — silencia warning de unused
-            pass
-        # yield para que el tipo de retorno sea AsyncIterator
-        if False:  # pragma: no cover
-            yield WakeEvent(model_name=self.model_name, score=0.0, timestamp=0.0)
+        scores = self._model.predict(chunk)
+        score = float(scores.get(self.model_name, 0.0))
+        if score >= self.threshold:
+            return WakeEvent(
+                model_name=self.model_name,
+                score=score,
+                timestamp=time.time(),
+            )
+        return None
 
     async def stop(self) -> None:
-        """Libera recursos del modelo."""
         self._model = None
         log.info("wakeword.stopped")

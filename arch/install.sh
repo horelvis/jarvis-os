@@ -49,7 +49,8 @@ sudo pacman -Syu --noconfirm --needed \
   foot wofi grim slurp wl-clipboard \
   jq ripgrep htop \
   btrfs-progs snapper \
-  python python-pip \
+  python python-pip uv \
+  portaudio \
   base-devel cmake pkgconf
 
 # ─── Step 2: Rust toolchain ───
