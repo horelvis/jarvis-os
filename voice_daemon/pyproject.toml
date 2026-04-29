@@ -1,0 +1,77 @@
+[project]
+name = "voice_daemon"
+version = "0.1.0"
+description = "jarvis-os voice daemon: openWakeWord + Silero VAD + Faster-Whisper STT + ElevenLabs Flash TTS, glued by an async Unix socket protocol"
+authors = [
+    { name = "Horelvis Castillo Mendoza" },
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT OR Apache-2.0" }
+
+dependencies = [
+    # Wake word detection. Liviano, CPU-only.
+    "openwakeword>=0.6,<0.7",
+
+    # Voice Activity Detection (Silero). Modelo Torch jit, ~1.5MB.
+    "silero-vad>=5.1,<6",
+
+    # Faster-Whisper (CTranslate2 backend de Whisper). distil-large-v3 ~750MB.
+    "faster-whisper>=1.1,<2",
+
+    # ElevenLabs SDK oficial para Flash TTS.
+    "elevenlabs>=1.10,<2",
+
+    # Captura/playback audio (ALSA via PipeWire bridge en Linux).
+    "sounddevice>=0.5,<0.6",
+
+    # Numérico (audio frames, amplitudes).
+    "numpy>=2,<3",
+
+    # Servidor IPC entre voice_daemon y IronClaw / HUD widgets.
+    "websockets>=14,<15",
+
+    # Logging estructurado JSON (compatible con journald si va embebido en NixOS).
+    "structlog>=25,<26",
+
+    # Cargar API keys desde .env del repo o partición FAT del USB.
+    "python-dotenv>=1,<2",
+]
+
+[project.optional-dependencies]
+# Para perfilado y dev tools — no se incluyen en la ISO live.
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.9",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+# Binary expuesto cuando se instala el paquete:
+#   `voice-daemon` arranca el pipeline.
+voice-daemon = "voice_daemon.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["voice_daemon"]
+
+[tool.uv]
+# uv siempre usa Python 3.12 declarado arriba.
+# Modo de resolución por defecto es "highest" (último compatible).
+
+[tool.ruff]
+# Python 3.11 (constraint por openwakeword → tflite-runtime sin wheels >=3.12).
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "RET", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true  # silero-vad, sounddevice no traen stubs

@@ -1,0 +1,19 @@
+[package]
+name = "jarvis_policies"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "Policy engine for jarvis-os: ALLOW/CONFIRM/DENY decisions over OS-level agent actions; sits on top of ironclaw_safety"
+authors = ["Horelvis Castillo Mendoza"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+ironclaw_safety = { path = "../ironclaw_safety" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+serde_json = "1"
