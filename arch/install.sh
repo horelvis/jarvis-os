@@ -50,7 +50,7 @@ sudo pacman -Syu --noconfirm --needed \
   jq ripgrep htop \
   btrfs-progs snapper \
   python python-pip uv \
-  portaudio \
+  portaudio alsa-lib \
   base-devel cmake pkgconf
 
 # ─── Step 2: Rust toolchain ───
@@ -85,12 +85,13 @@ if [ ! -d "$HOME/dots-hyprland" ]; then
 fi
 
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
-log "Compilando ironclaw + jarvis_linux_mcp (release)..."
+log "Compilando ironclaw + jarvis_linux_mcp + jarvis_voice_daemon (release)..."
 log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
 cargo build --release --bin ironclaw
 cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
+cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
-for bin in ironclaw jarvis-linux-mcp; do
+for bin in ironclaw jarvis-linux-mcp jarvis-voice-daemon; do
     src="$JARVIS_OS_DIR/target/release/$bin"
     if [ -f "$src" ]; then
         sudo install -Dm755 "$src" "/usr/local/bin/$bin"

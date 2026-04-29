@@ -1,15 +1,15 @@
 [Unit]
-Description=jarvis-os voice daemon (wake word + VAD + STT)
+Description=jarvis-os voice daemon (ElevenLabs Conversational AI client)
 After=pipewire.service
 Wants=pipewire.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/jarvis-os/voice_daemon
-ExecStart=/usr/bin/uv run voice-daemon
+EnvironmentFile=-%h/.ironclaw/.env
+ExecStart=/usr/local/bin/jarvis-voice-daemon
 Restart=on-failure
 RestartSec=3
-# Logs por stdout van a journald: journalctl --user -u jarvis-voice-daemon -f
+# Logs JSON estructurados van a journald: journalctl --user -u jarvis-voice-daemon -f
 
 [Install]
 WantedBy=default.target

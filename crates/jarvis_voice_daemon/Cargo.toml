@@ -1,0 +1,44 @@
+[package]
+name = "jarvis_voice_daemon"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "jarvis-os voice daemon: ElevenLabs Conversational AI client (audio in/out + WebSocket)"
+
+[[bin]]
+name = "jarvis-voice-daemon"
+path = "src/main.rs"
+
+[dependencies]
+# Audio capture/playback. cpal detecta PipeWire automáticamente en Arch.
+cpal = "0.15"
+ringbuf = "0.4"
+
+# WebSocket client.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+tokio = { version = "1.40", features = ["full"] }
+futures-util = "0.3"
+
+# HTTP client (para webhooks de tool calls hacia IronClaw).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Serialización del protocolo ElevenLabs Conversational AI.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# base64 (audio chunks van encodados).
+base64 = "0.22"
+
+# Logging consistente con IronClaw.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Errores.
+thiserror = "2"
+anyhow = "1"
+
+# .env loading.
+dotenvy = "0.15"
+
+# Argumentos de línea de comandos.
+clap = { version = "4", features = ["derive", "env"] }

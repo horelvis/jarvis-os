@@ -50,13 +50,14 @@ log "Compilando crates Rust (cargo decide qué rebuild)..."
 cd "$JARVIS_OS_DIR"
 cargo build --release --bin ironclaw
 cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
+cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
 ##############################################
 # Step 2: Reinstala binarios                 #
 ##############################################
 
 # Compara hash por binario; reinstala solo si difiere para evitar restarts innecesarios.
-for bin in ironclaw jarvis-linux-mcp; do
+for bin in ironclaw jarvis-linux-mcp jarvis-voice-daemon; do
     NEW_BIN="$JARVIS_OS_DIR/target/release/$bin"
     DST_BIN="/usr/local/bin/$bin"
 
@@ -170,6 +171,12 @@ if systemctl --user is-active jarvis-mcp-register.service >/dev/null 2>&1; then
     log "Restart jarvis-mcp-register para que recoja binary actualizado..."
     systemctl --user restart jarvis-mcp-register.service || \
         warn "Restart falló; revisar logs con journalctl --user -u jarvis-mcp-register"
+fi
+
+if systemctl --user is-active jarvis-voice-daemon.service >/dev/null 2>&1; then
+    log "Restart jarvis-voice-daemon para recoger binary actualizado..."
+    systemctl --user restart jarvis-voice-daemon.service || \
+        warn "Restart falló; revisar logs con journalctl --user -u jarvis-voice-daemon"
 fi
 
 ##############################################
