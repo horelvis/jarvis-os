@@ -1105,7 +1105,13 @@ impl SetupWizard {
                 return self.step_database().await;
             }
 
-            if let Ok(url) = std::env::var("DATABASE_URL") {
+            // Only fall back to postgres-from-DATABASE_URL when the user has
+            // not explicitly chosen libsql. Otherwise a placeholder URL meant
+            // to satisfy `Config::resolve()` (see DatabaseConfig::resolve)
+            // would dispatch postgres setup with an invalid connection string.
+            if env_backend.is_none()
+                && let Ok(url) = std::env::var("DATABASE_URL")
+            {
                 return self.finish_postgres_auto_setup(url).await;
             }
         }
@@ -4725,6 +4731,45 @@ mod tests {
         // persist_settings must succeed (proves migrations ran)
         let saved = wizard.persist_settings().await.unwrap();
         assert!(saved, "persist_settings must save to the database");
+    }
+
+    /// Regression: when both postgres and libsql features are compiled and
+    /// `DATABASE_BACKEND=libsql` is set, a stale or placeholder
+    /// `DATABASE_URL` (e.g. left over from a wrapper script that exported
+    /// `unused://libsql` to satisfy `DatabaseConfig::resolve()`) must NOT
+    /// dispatch the postgres auto-setup branch. Before the fix, the wizard
+    /// fell through to `finish_postgres_auto_setup("unused://libsql")`,
+    /// which crashed the deadpool config with `invalid connection string`
+    /// during first-run on jarvis-os.
+    #[cfg(all(feature = "postgres", feature = "libsql"))]
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn test_auto_setup_database_libsql_ignores_placeholder_database_url() {
+        let _lock = lock_env();
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+
+        let _backend_guard = EnvGuard::set("DATABASE_BACKEND", "libsql");
+        let _path_guard = EnvGuard::set("LIBSQL_PATH", db_path.to_str().unwrap());
+        let _url_guard = EnvGuard::set("DATABASE_URL", "unused://libsql");
+
+        let mut wizard = SetupWizard::new();
+        wizard.config.quick = true;
+
+        wizard
+            .auto_setup_database()
+            .await
+            .expect("libsql backend must win over placeholder DATABASE_URL");
+
+        assert_eq!(
+            wizard.settings.database_backend.as_deref(),
+            Some("libsql"),
+            "wizard must persist libsql, not postgres"
+        );
+        assert!(
+            wizard.settings.libsql_path.is_some(),
+            "libsql path must be recorded"
+        );
     }
 
     /// Start a pgvector-enabled Postgres container for integration tests,
