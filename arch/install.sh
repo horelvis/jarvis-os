@@ -53,8 +53,10 @@ sudo pacman -Syu --noconfirm --needed \
   base-devel cmake pkgconf
 
 # ─── Step 2: Rust toolchain ───
-if ! command -v cargo >/dev/null 2>&1; then
-    log "Instalando Rust toolchain via rustup..."
+# `command -v cargo` da true porque rustup crea un stub aunque no haya
+# toolchain. Lo correcto es preguntarle a rustup si tiene un default.
+if ! rustup show active-toolchain 2>/dev/null | grep -q '[0-9]'; then
+    log "Configurando default toolchain Rust (stable)..."
     rustup default stable
 fi
 
