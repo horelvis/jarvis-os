@@ -16,8 +16,25 @@ use ringbuf::{
     traits::{Consumer, Observer, Producer, Split},
 };
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+
+/// Cuántos ms tras el último chunk de audio del agente seguimos
+/// considerando que el agente está hablando, y por tanto silenciamos
+/// el mic. Sin esto, el speaker emite audio que vuelve al mic, lo
+/// reenviamos como user_audio_chunk, y ElevenLabs cree que el user
+/// quiere interrumpir → corta al agente. Half-duplex no es perfecto
+/// (perdemos barge-in real), pero arregla el corte de utterances
+/// largas hasta que añadamos echo cancellation real.
+const HALF_DUPLEX_LOCKOUT_MS: u64 = 600;
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// Tamaño de chunk: ~50ms a 16kHz = 800 samples = 1600 bytes int16.
 /// ElevenLabs recomienda chunks ~50-100ms para latencia óptima.
@@ -71,6 +88,12 @@ impl SpeakerTx {
 pub fn start() -> Result<AudioIo> {
     let host = cpal::default_host();
 
+    // Timestamp del último chunk de audio del agente entrante. Mic
+    // input se silencia mientras `now - last_agent_audio_ms <
+    // HALF_DUPLEX_LOCKOUT_MS`. Compartido entre el thread del speaker
+    // (escribe) y el callback de input (lee).
+    let last_agent_audio_ms = Arc::new(AtomicU64::new(0));
+
     // ─── Input (mic) ───
     let input_device = host
         .default_input_device()
@@ -87,7 +110,12 @@ pub fn start() -> Result<AudioIo> {
     );
 
     let (mic_tx, mic_rx) = mpsc::channel::<Vec<i16>>(64);
-    let input_stream = build_input_stream(&input_device, &input_config, mic_tx)?;
+    let input_stream = build_input_stream(
+        &input_device,
+        &input_config,
+        mic_tx,
+        last_agent_audio_ms.clone(),
+    )?;
     input_stream.play().context("starting input stream")?;
 
     // ─── Output (speaker) ───
@@ -107,8 +135,13 @@ pub fn start() -> Result<AudioIo> {
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel::<SpeakerCmd>();
     let flush_flag = Arc::new(AtomicBool::new(false));
-    let output_stream =
-        build_output_stream(&output_device, &output_config, cmd_rx, flush_flag.clone())?;
+    let output_stream = build_output_stream(
+        &output_device,
+        &output_config,
+        cmd_rx,
+        flush_flag.clone(),
+        last_agent_audio_ms.clone(),
+    )?;
     output_stream.play().context("starting output stream")?;
 
     Ok(AudioIo {
@@ -126,6 +159,7 @@ fn build_input_stream(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
     tx: mpsc::Sender<Vec<i16>>,
+    last_agent_audio_ms: Arc<AtomicU64>,
 ) -> Result<cpal::Stream> {
     let stream_config: cpal::StreamConfig = config.config();
     let device_rate = stream_config.sample_rate.0 as f32;
@@ -139,10 +173,17 @@ fn build_input_stream(
     let mut subsample_acc: f32 = 0.0;
     let err_fn = |e| tracing::warn!(error = %e, "audio.input_error");
 
+    let lockout_f32 = last_agent_audio_ms.clone();
+    let lockout_i16 = last_agent_audio_ms.clone();
+    let lockout_u16 = last_agent_audio_ms;
+
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream(
             &stream_config,
             move |data: &[f32], _| {
+                if mic_locked_out(&lockout_f32) {
+                    return;
+                }
                 process_input::<f32>(
                     data,
                     device_channels,
@@ -158,6 +199,9 @@ fn build_input_stream(
         cpal::SampleFormat::I16 => device.build_input_stream(
             &stream_config,
             move |data: &[i16], _| {
+                if mic_locked_out(&lockout_i16) {
+                    return;
+                }
                 process_input::<i16>(
                     data,
                     device_channels,
@@ -173,6 +217,9 @@ fn build_input_stream(
         cpal::SampleFormat::U16 => device.build_input_stream(
             &stream_config,
             move |data: &[u16], _| {
+                if mic_locked_out(&lockout_u16) {
+                    return;
+                }
                 process_input::<u16>(
                     data,
                     device_channels,
@@ -189,6 +236,14 @@ fn build_input_stream(
     };
 
     Ok(stream)
+}
+
+fn mic_locked_out(last_agent_audio_ms: &Arc<AtomicU64>) -> bool {
+    let last = last_agent_audio_ms.load(Ordering::Acquire);
+    if last == 0 {
+        return false;
+    }
+    now_ms().saturating_sub(last) < HALF_DUPLEX_LOCKOUT_MS
 }
 
 trait ToI16 {
@@ -248,6 +303,7 @@ fn build_output_stream(
     config: &cpal::SupportedStreamConfig,
     mut cmd_rx: mpsc::UnboundedReceiver<SpeakerCmd>,
     flush_flag: Arc<AtomicBool>,
+    last_agent_audio_ms: Arc<AtomicU64>,
 ) -> Result<cpal::Stream> {
     let stream_config: cpal::StreamConfig = config.config();
     let device_rate = stream_config.sample_rate.0 as f32;
@@ -281,6 +337,12 @@ fn build_output_stream(
                 None => break, // canal cerrado → termina hilo
             };
             let SpeakerCmd::Pcm(pcm) = cmd;
+
+            // Marca timestamp del último chunk recibido — el callback
+            // de input usa esto para silenciar el mic durante
+            // HALF_DUPLEX_LOCKOUT_MS y evitar que el eco del speaker
+            // dispare un barge-in falso.
+            last_agent_audio_ms.store(now_ms(), Ordering::Release);
 
             let mut idx_f: f32 = frac;
             let mut iter = pcm.into_iter();
