@@ -6,6 +6,12 @@ pub struct Config {
     pub api_key: String,
     pub system_prompt_override: Option<String>,
     pub sample_rate: u32,
+    /// Variables dinámicas que el agente requiere para resolver
+    /// placeholders `{{var}}` en su system prompt. Las declaras en
+    /// consola de ElevenLabs y aquí las pasas con valor concreto. Si
+    /// el agente las exige y no las mandas, el WS se cierra con
+    /// `Policy: Missing required dynamic variables`.
+    pub dynamic_variables: std::collections::BTreeMap<String, String>,
 }
 
 impl Config {

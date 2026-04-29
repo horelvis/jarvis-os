@@ -17,17 +17,24 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Mensaje inicial. Puede ir vacío o con overrides de prompt/voice/lang.
+/// Mensaje inicial. Lleva opcionalmente un override del prompt/voice y
+/// un mapa de `dynamic_variables` que el agente requiere para resolver
+/// los `{{placeholders}}` declarados en su system prompt en consola.
 #[derive(Debug, Serialize)]
 pub struct ConversationInitiation {
     #[serde(rename = "type")]
     pub kind: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_config_override: Option<ConfigOverride>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dynamic_variables: std::collections::BTreeMap<String, String>,
 }
 
 impl ConversationInitiation {
-    pub fn new(prompt_override: Option<String>) -> Self {
+    pub fn new(
+        prompt_override: Option<String>,
+        dynamic_variables: std::collections::BTreeMap<String, String>,
+    ) -> Self {
         let override_block = prompt_override.map(|prompt| ConfigOverride {
             agent: Some(AgentOverride {
                 prompt: Some(PromptOverride { prompt }),
@@ -39,6 +46,7 @@ impl ConversationInitiation {
         Self {
             kind: "conversation_initiation_client_data",
             conversation_config_override: override_block,
+            dynamic_variables,
         }
     }
 }

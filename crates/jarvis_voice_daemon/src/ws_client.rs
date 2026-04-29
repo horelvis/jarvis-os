@@ -71,8 +71,12 @@ pub async fn connect(cfg: &Config) -> Result<WsClient> {
     let (outbound_tx, outbound_rx) = mpsc::channel::<Outbound>(64);
     let (inbound_tx, inbound_rx) = mpsc::channel::<Inbound>(64);
 
-    // Mensaje inicial — overrides opcionales del system prompt.
-    let init = ConversationInitiation::new(cfg.system_prompt_override.clone());
+    // Mensaje inicial — overrides opcionales del system prompt y
+    // variables dinámicas que el agente puede requerir.
+    let init = ConversationInitiation::new(
+        cfg.system_prompt_override.clone(),
+        cfg.dynamic_variables.clone(),
+    );
     let init_json = serde_json::to_string(&init).context("serialize init")?;
 
     let (mut sink, mut stream) = ws.split();

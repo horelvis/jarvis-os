@@ -34,6 +34,46 @@ struct Args {
     /// Sobrescribe el system prompt del agente para esta sesión.
     #[arg(long, env = "JARVIS_VOICE_SYSTEM_PROMPT_OVERRIDE")]
     system_prompt_override: Option<String>,
+
+    /// Variables dinámicas para el initial message, formato `key=value`.
+    /// Repetir la flag para varias: `--var display_name=Horelvis --var foo=bar`.
+    /// También se pueden pasar vía env: `JARVIS_VOICE_VARS="display_name=Horelvis,foo=bar"`.
+    #[arg(long = "var", value_parser = parse_kv, num_args = 0..)]
+    vars: Vec<(String, String)>,
+
+    /// Como `--var` pero un único string separado por comas, ideal para
+    /// declarar en `~/.ironclaw/.env` (`JARVIS_VOICE_VARS="key=val,k2=v2"`).
+    #[arg(long, env = "JARVIS_VOICE_VARS")]
+    vars_env: Option<String>,
+}
+
+fn parse_kv(raw: &str) -> Result<(String, String), String> {
+    raw.split_once('=')
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .ok_or_else(|| format!("expected key=value, got '{raw}'"))
+}
+
+fn merge_dynamic_vars(
+    cli: Vec<(String, String)>,
+    env_str: Option<String>,
+) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    if let Some(s) = env_str {
+        for entry in s.split(',') {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                continue;
+            }
+            if let Ok((k, v)) = parse_kv(entry) {
+                out.insert(k, v);
+            }
+        }
+    }
+    // Las flags CLI ganan sobre la env var.
+    for (k, v) in cli {
+        out.insert(k, v);
+    }
+    out
 }
 
 fn init_tracing() {
@@ -82,16 +122,20 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    let dynamic_variables = merge_dynamic_vars(args.vars, args.vars_env);
+
     let cfg = Config {
         agent_id: args.agent_id,
         api_key: args.api_key,
         system_prompt_override: args.system_prompt_override,
         sample_rate: 16_000,
+        dynamic_variables,
     };
 
     tracing::info!(
         agent_id = %cfg.agent_id_redacted(),
         sample_rate = cfg.sample_rate,
+        dynamic_var_keys = ?cfg.dynamic_variables.keys().collect::<Vec<_>>(),
         "daemon.starting"
     );
 
