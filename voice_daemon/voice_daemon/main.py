@@ -188,12 +188,15 @@ async def _run() -> None:
     stt = Transcriber()
     tts = Speaker()
 
+    # Modelos primero (carga 2-15s). El audio_capture se arranca al final
+    # para que no haya frames acumulándose mientras el consumer aún no
+    # existe y la cola no se desborde.
     await server.start()
-    await capture.start()
     await wake.start()
     await vad.start()
     await stt.start()
     await tts.start()
+    await capture.start()
 
     await server.emit({"type": "agent_state", "state": "idle"})
 

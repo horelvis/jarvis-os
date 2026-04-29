@@ -28,7 +28,7 @@ class CaptureConfig:
     chunk_size: int = 512  # 32ms a 16kHz: óptimo para Silero VAD.
     channels: int = 1
     dtype: str = "int16"
-    queue_max: int = 64  # ~2s de buffering ante stalls del consumer.
+    queue_max: int = 256  # ~8s de buffering; ante stalls dropeamos sin petar.
 
 
 class AudioCapture:
@@ -47,6 +47,7 @@ class AudioCapture:
         self._queue: asyncio.Queue[np.ndarray] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stream: Any = None  # sd.InputStream
+        self._dropped: int = 0
 
     async def start(self) -> None:
         # Lazy import: sounddevice abre el lib de PortAudio en el constructor.
@@ -55,22 +56,36 @@ class AudioCapture:
         self._loop = asyncio.get_running_loop()
         self._queue = asyncio.Queue(maxsize=self.config.queue_max)
 
+        def _safe_put(chunk: np.ndarray) -> None:
+            # Corre en el event loop (no en el hilo de PortAudio). Si la
+            # cola está llena (consumer momentáneamente atrás), dropeamos
+            # el chunk silenciosamente y contamos para diagnóstico — mejor
+            # un agujero de 32 ms que tirar el daemon.
+            if self._queue is None:
+                return
+            try:
+                self._queue.put_nowait(chunk)
+            except asyncio.QueueFull:
+                self._dropped += 1
+                if self._dropped == 1 or self._dropped % 50 == 0:
+                    log.warning(
+                        "audio.queue_full_dropping",
+                        total_dropped=self._dropped,
+                    )
+
         def callback(
             indata: np.ndarray,
             frames: int,
             _time_info: Any,
             status: Any,
         ) -> None:
-            # Llamado desde el hilo de PortAudio. Mantener mínimo: copiar y
-            # encolar atómicamente desde el event loop.
+            # Hilo de PortAudio. Copiar y delegar al loop sin bloquear.
             if status:
                 log.warning("audio.input_status", status=str(status))
-            # indata: shape (frames, channels). Forzar 1D mono int16.
             mono = np.ascontiguousarray(indata[:, 0])
             assert self._loop is not None
-            assert self._queue is not None
             try:
-                self._loop.call_soon_threadsafe(self._queue.put_nowait, mono)
+                self._loop.call_soon_threadsafe(_safe_put, mono)
             except RuntimeError:
                 # loop cerrado durante shutdown.
                 pass
