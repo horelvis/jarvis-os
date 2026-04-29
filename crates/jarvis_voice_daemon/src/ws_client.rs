@@ -166,9 +166,11 @@ pub async fn connect(cfg: &Config) -> Result<WsClient> {
         let _ = inbound_tx_clone.send(Inbound::Disconnected).await;
     });
 
-    // Mantenemos las tasks vivas por su Drop side-effect.
-    drop(outbound_task);
-    drop(inbound_task);
+    // Detached: las tasks corren hasta que el WS muera por sí mismo
+    // (cliente cierra outbound_tx → outbound termina; server cierra
+    // socket → inbound termina). No esperamos sus handles aquí.
+    let _ = outbound_task;
+    let _ = inbound_task;
 
     Ok(WsClient {
         outbound_tx,

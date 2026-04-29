@@ -38,10 +38,7 @@ impl ConversationInitiation {
         let override_block = prompt_override.map(|prompt| ConfigOverride {
             agent: Some(AgentOverride {
                 prompt: Some(PromptOverride { prompt }),
-                first_message: None,
-                language: None,
             }),
-            tts: None,
         });
         Self {
             kind: "conversation_initiation_client_data",
@@ -55,29 +52,17 @@ impl ConversationInitiation {
 pub struct ConfigOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentOverride>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tts: Option<TtsOverride>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct AgentOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<PromptOverride>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub first_message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub language: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct PromptOverride {
     pub prompt: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TtsOverride {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub voice_id: Option<String>,
 }
 
 /// Audio del usuario: PCM 16kHz int16 mono codificado en base64.
@@ -180,7 +165,6 @@ pub struct ConversationInitiationMetadataEvent {
 #[derive(Debug, Deserialize)]
 pub struct AudioEvent {
     pub audio_base_64: String,
-    pub event_id: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -208,7 +192,6 @@ pub struct InterruptionEvent {
 #[derive(Debug, Deserialize)]
 pub struct PingEvent {
     pub event_id: u64,
-    pub ping_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

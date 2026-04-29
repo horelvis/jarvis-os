@@ -121,6 +121,9 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let args = Args::parse();
+    // `env_file` ya fue consumido por load_env() antes de Args::parse;
+    // lo declaramos en Args sólo para que aparezca en --help.
+    let _ = args.env_file;
 
     let dynamic_variables = merge_dynamic_vars(args.vars, args.vars_env);
 
