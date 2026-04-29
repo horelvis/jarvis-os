@@ -22,14 +22,20 @@ fi
 : "${IRONCLAW_HOME:=$HOME/.ironclaw}"
 : "${DATABASE_BACKEND:=libsql}"
 : "${LIBSQL_PATH:=$IRONCLAW_HOME/jarvis.db}"
-: "${DATABASE_URL:=unused://libsql}"
 : "${AGENT_NAME:=jarvis}"
 : "${HEARTBEAT_ENABLED:=false}"
 : "${IRONCLAW_PROFILE:=local}"
 
+# Si el backend es libsql, no debe haber DATABASE_URL: el wizard de
+# quick-setup (postgres feature compilada) asume Postgres en cuanto ve
+# la variable, ignorando DATABASE_BACKEND, y revienta el pool.
+if [ "$DATABASE_BACKEND" = "libsql" ]; then
+    unset DATABASE_URL
+fi
+
 mkdir -p "$IRONCLAW_HOME"
 
-export IRONCLAW_HOME DATABASE_BACKEND LIBSQL_PATH DATABASE_URL \
+export IRONCLAW_HOME DATABASE_BACKEND LIBSQL_PATH \
        AGENT_NAME HEARTBEAT_ENABLED IRONCLAW_PROFILE
 
 exec ironclaw "$@"
