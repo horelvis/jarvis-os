@@ -1,137 +1,194 @@
 # jarvis-os
 
 OS Linux integrado y agéntico construido sobre [IronClaw](README.md).
-Voz envolvente, HUD circular cyan, control profundo del sistema vía MCP, todo
-local con fallback cloud para LLM y TTS.
+Voz envolvente, HUD circular cyan, control profundo del sistema vía MCP,
+todo local con fallback cloud para LLM y TTS.
 
 > Proyecto de estudio personal. Ver `jarvis-os-spec-v0.2.docx.md` para la
 > especificación completa (arquitectura, fases F1→F10, políticas, formatos
 > de auditoría, paleta visual del HUD).
 
-## Estado actual: F0 — ISO booteable
+## Estado actual: F1.3.b — voice input pipeline
 
-Esta rama (`jarvis-fedora-os`) contiene la base NixOS sobre la que se
-construye la live ISO de pruebas. **No reemplaza macOS en el iMac**: la
-imagen se flashea a un USB, se arranca con Option al encender, y el disco
-interno queda intacto.
+Rama de trabajo: **`jarvis-arch-os`** (Arch Linux como base, ver
+`legacy/nixos/` para el trabajo NixOS v1-v19 ya histórico).
 
-Estado por fase:
+Fases:
 
-- **Pre-F0** ✓ — toolchain Rust + Nix package manager + devShell + IronClaw compila.
-- **F0** (en curso) — flake con `nixosConfigurations.imac-2014` y output `packages.iso`.
-- **F1+** — pendiente (engine + voz MVP + HUD básico, ver spec).
+- **F0** ✅ — Bootstrap idempotente Arch (`arch/install.sh` + `arch/update.sh`).
+- **F1.1** ✅ — `crates/jarvis_policies/` (decisión ALLOW/CONFIRM/DENY).
+- **F1.2** ✅ — `crates/jarvis_linux_mcp/` con 8 tools (process, journal,
+  polkit, network, systemd, btrfs, file_read_safe, policy.evaluate).
+- **F1.3.a** ✅ — Scaffold `voice_daemon/` con contratos WS estables.
+- **F1.3.b** 🚧 — Input pipeline (audio → VAD → wake → STT) **implementado,
+  pendiente validar en Asus** (TTY 1 abierto sobre el laptop, ver
+  retoma abajo).
+- **F1.4** ✅ — install.sh / update.sh / systemd-user / wrappers.
+- **F1.3.c** ⏳ — TTS playback ElevenLabs (stub).
+- **F1.3 cabledo a IronClaw** ⏳ — `transcript_final` → `ironclaw chat` →
+  `speak`.
+- **F2** ⏳ — HUD widgets distribuidos (EWW + Tauri ring).
 
 ## Hardware
 
-| Rol      | Equipo                | Specs                                                |
-|----------|-----------------------|------------------------------------------------------|
-| Dev      | Bestia local          | i9-14900K (32 threads), RTX 4090 24 GB, 62 GB RAM, Ubuntu 24.04 |
-| Target   | iMac 27" 5K Retina late 2014 | i7-4790K (8 threads), AMD R9 M295X 4 GB, 32 GB DDR3-1600 |
+| Rol | Equipo | Specs |
+|-----|--------|-------|
+| Dev box | bestia local | i9-14900K (32 hilos), RTX 4090 24 GB, 62 GB RAM, Ubuntu 24.04 |
+| Target principal | Asus ZenBook UX431FLC | i7-8565U, NVIDIA MX250 2 GB, Intel UHD 620, 16 GB RAM, mic Realtek HDA, audio PipeWire |
 
-El dev box genera la ISO. El iMac sólo la consume vía USB.
+iMac 2014 fue target original (v1-v18) pero quedó descartado por fricción
+(5K MST, AMD Tonga, applesmc, Broadcom WiFi propietaria). El iMac ya no es
+prioridad — todo el desarrollo va sobre el Asus.
 
-## Estructura de archivos NixOS
+## Estructura del repo
 
 ```
-flake.nix              # entry point: inputs, devShells, nixosConfigurations, packages.iso
-nixos/
-  imac-2014.nix        # módulo hardware: kernel, broadcom_sta, amdgpu, applesmc, audio
-  desktop.nix          # Hyprland + greetd autologin + paquetes Wayland base
-  iso.nix              # iso-image.nix wrapper + makeUsb/EfiBootable + volumeID
+arch/                       # Bootstrap + mantenimiento sobre Arch base
+  install.sh                # 1 vez tras archinstall — idempotente
+  update.sh                 # cada git pull — recompila + reinstala lo que cambió
+  configs/hyprland/         # overrides que update.sh appendea a custom/*.conf
+    general.conf            # input es, gestures, borde cyan
+    keybinds.conf           # Super+Y/N inline confirm F1.5
+  scripts/jarvis-chat       # wrapper que sourcea ~/.ironclaw/.env
+  systemd-user/             # services que arrancan en sesión Hyprland
+    jarvis-mcp-register.service
+    jarvis-voice-daemon.service
+  templates/ironclaw.env    # plantilla del .env sin keys
+
+crates/
+  jarvis_policies/          # ALLOW/CONFIRM/DENY decision engine
+  jarvis_linux_mcp/         # MCP server stdio con 8 tools de Linux
+
+voice_daemon/               # F1.3 — Python uv sandbox 3.11
+  voice_daemon/
+    audio_capture.py        # sounddevice 16kHz mono int16 chunks 512
+    vad.py                  # silero-vad torch JIT
+    wakeword.py             # openwakeword "hey_jarvis" ONNX
+    stt.py                  # faster-whisper base int8 español
+    tts.py                  # stub F1.3.c (ElevenLabs)
+    server.py               # WebSocket :7331 JSON line-by-line
+    main.py                 # FSM idle→listening→thinking→idle
+  scripts/
+    setup.sh                # bootstrap idempotente (uv python + uv sync + modelos)
+    run.sh                  # arranca con logs filtrados/coloreados
+
+src/                        # IronClaw core (Rust workspace)
+crates/                     # IronClaw crates extraídos
+assets/wallpaper.jpg        # wallpaper cyan oficial jarvis-os
 ```
 
-Todos los archivos `.nix` están comentados línea a línea para servir de
-material de estudio. La pedagogía está integrada en los comentarios — al
-modificar algo, leerse el bloque relevante primero.
+## Cómo retomar tras una pausa larga
 
-## Stack técnico (decisiones cerradas)
+Suponiendo que vienes a una sesión nueva con el laptop apagado y nada más
+en la cabeza:
 
-| Capa         | Elección                                  | Razón                                              |
-|--------------|-------------------------------------------|----------------------------------------------------|
-| Distro base  | NixOS unstable                            | Declarativo, reproducible, ISO trivial vía flake.  |
-| Compositor   | Hyprland                                  | wlroots → layer-shell nativo (HUD envolvente F2+). |
-| Persistencia | **Stateless** (todo en RAM/tmpfs)         | Modo pruebas; persistencia volverá en futuro.      |
-| Lenguaje núcleo | Rust 1.92                              | IronClaw, MSRV de Cargo.toml.                     |
-| Voz STT      | Faster-Whisper distil-large-v3 (local)    | Ya consolidado, sin coste runtime.                |
-| Voz TTS      | ElevenLabs Flash (cloud)                  | XTTS-v2 en CPU iMac no es viable.                 |
-| LLM main     | Claude Sonnet 4.6 (cloud, prompt caching) | Coste razonable con caching, calidad alta.        |
-| LLM fallback | Gemma 4 E4B (local, eventual)             | 4.5B params efectivos, 128K ctx, function calling. |
-| Políticas    | Crate hermano `jarvis_policies` extiende `ironclaw_safety` | No OPA externo. |
-
-## Comandos básicos
-
-### Entrar al devShell
+### 1. En el dev box (este equipo)
 
 ```bash
 cd /home/nexus/git/jarvis-os
-nix develop
+git status                                      # rama y cambios pendientes
+git log --oneline -10                           # últimos commits
+cat /home/nexus/.claude/projects/-home-nexus-git-jarvis-os/memory/MEMORY.md
 ```
 
-Te entrega un shell con `rustc 1.92`, `cargo`, `pkg-config`, `cmake`, `git`,
-`cacert` y `SSL_CERT_FILE` apuntando al bundle del Nix store.
+`MEMORY.md` indexa todo el estado conversacional acumulado entre
+sesiones. Lee los pointers que parezcan relevantes.
 
-### Compilar IronClaw
+### 2. En el laptop Asus (jarvis-asus)
 
-Dentro del devShell:
+Boot, login al usuario `jarvis`, en TTY1 escribe `Hyprland` (o configura
+auto-start vía display manager más adelante). Una vez en Hyprland abre
+una terminal y:
 
 ```bash
-cargo check        # type-check rápido
-cargo build        # build completo (debug)
-cargo build --release  # build optimizado
+cd /opt/jarvis-os
+git pull
+./arch/update.sh                # aplica cambios al sistema
 ```
 
-### Construir la ISO
+Para arrancar IronClaw (modo agente texto):
 
 ```bash
-nix build .#iso
+jarvis-chat run
 ```
 
-La primera vez descarga ~1-2 GB de paquetes desde caches. Output:
-`result/iso/jarvis-os-*.iso`.
-
-### Flashear el USB (≥ 4 GB)
-
-> ⚠️ `dd` no perdona errores en el `of=`. Verificar el dispositivo antes con
-> `lsblk`. **Equivocarse de letra borra el disco que NO querías borrar.**
+Para arrancar el voice daemon (modo voz, F1.3.b):
 
 ```bash
-lsblk                           # identifica el USB (p.ej. /dev/sdb)
-sudo dd if=result/iso/jarvis-os-*.iso of=/dev/sdX bs=4M status=progress conv=fsync
-sync
+cd /opt/jarvis-os/voice_daemon
+./scripts/setup.sh              # 1 vez tras `git pull` con cambios en deps
+./scripts/run.sh                # arranca con logs filtrados (recomendado)
+# O directo:
+uv run voice-daemon
 ```
 
-Alternativa más segura: `usbimager` o `balenaEtcher` (GUI con confirmación).
+Luego dices **"hey jarvis, qué hora es"** y el log muestra
+`wake.detected` → `transcript.final`.
 
-### Bootear en el iMac 2014
+## Comandos básicos
 
-1. Insertar USB en el iMac apagado.
-2. Encender manteniendo **Option (⌥)** pulsada.
-3. En el boot picker de Apple, seleccionar la entrada **EFI Boot** (USB).
-4. Esperar al systemd-boot/grub menú → entrar.
-5. Auto-login al usuario `jarvis` → Hyprland.
+### Compilar y aplicar cambios
 
-Si no aparece la entrada EFI: revisar que la ISO se generó con
-`makeEfiBootable = true` (debería; si falló, ver `nixos/iso.nix`).
+```bash
+cd /opt/jarvis-os
+./arch/update.sh                # cargo build + reinstala binarios cambiados
+```
 
-## Notas sobre hardware del iMac 2014
+### Verificar que jarvis-linux MCP está vivo
 
-| Componente | Driver / Módulo | Notas |
-|-----|-----|-----|
-| WiFi BCM4360 | `broadcom_sta` (alias `wl`) | Propietario, `unfree` + `insecure`. No hay alternativa libre que funcione. Permitido puntualmente en `imac-2014.nix`. |
-| GPU R9 M295X (Tonga, GCN 1.2) | `amdgpu` | Soporte nativo desde kernel 4.x. |
-| Audio Cirrus CS4208 | `snd_hda_intel` + PipeWire | Funciona out-of-the-box. |
-| Sensores SMC | `applesmc` | Lectura de temperaturas y ventiladores. |
-| Teclado Apple | `hid_apple` con `fnmode=2` | F-keys directas, multimedia con fn. |
-| Cámara FaceTime HD | `facetimehd` (out-of-tree) | NO incluido todavía; añadir si se necesita. |
+```bash
+ironclaw mcp list               # debe listar jarvis-linux registrado
+ironclaw mcp test jarvis-linux  # debe listar 8 tools disponibles
+```
 
-## Pendientes inmediatos (post-F0)
+### Logs systemd-user
 
-- [ ] Bootear la ISO en QEMU primero (`qemu-system-x86_64 -bios OVMF.fd`).
-- [ ] Bootear en el iMac real, validar WiFi + GPU + audio + Hyprland.
-- [ ] Añadir crate `crates/jarvis_policies/` (extensión de `ironclaw_safety`).
-- [ ] Voice daemon Python (`voice_daemon/`) con openWakeWord + Silero VAD + Whisper.
-- [ ] Linux MCP server Rust (`crates/jarvis_linux_mcp/`) con zbus + polkit + systemd.
-- [ ] HUD Tauri (`crates/jarvis_hud/`) con layer-shell.
+```bash
+journalctl --user -u jarvis-mcp-register -f
+journalctl --user -u jarvis-voice-daemon -f
+```
+
+### Rollback Btrfs (equivalente a `nixos-rebuild --rollback`)
+
+GRUB muestra entries de snapshots de snapper. Reboot → elegir snapshot
+anterior. snapper-timeline + grub-btrfsd corren auto.
+
+## Stack técnico (decisiones cerradas)
+
+| Capa | Elección | Razón |
+|------|----------|-------|
+| Distro base | **Arch Linux** | Rolling, control fino, sin abstracción Nix sobre comunidad shell |
+| Compositor | Hyprland + illogical-impulse (end-4) | Quickshell/Material You, AI panel built-in |
+| Persistencia | Disco persistente Btrfs + snapper | Rollback equivalente a generations |
+| Idioma teclado | es | Default jarvis-os baked en `arch/configs/hyprland/general.conf` |
+| Lenguaje núcleo | Rust 1.92 | IronClaw + crates jarvis_* |
+| Lenguaje voz | Python 3.11 (uv sandbox) | openWakeWord legacy py constraint, aislado del system Python 3.14 |
+| Voz STT | faster-whisper base/int8 español | CPU-friendly, latencia <2s |
+| Voz wake | openwakeword "hey_jarvis" ONNX | Built-in, threshold 0.5 |
+| Voz VAD | silero-vad torch JIT | ~1.5MB, hysteresis 200ms |
+| Voz TTS | ElevenLabs Flash v2_5 (cloud) | F1.3.c — calidad alta, $5/mes uso normal |
+| LLM main | Claude Sonnet 4.6 (Anthropic API) | Coste razonable con prompt caching |
+| DB IronClaw | libSQL local en `~/.ironclaw/jarvis.db` | Stateless por defecto, opt-in Turso sync |
+| Políticas | crate `jarvis_policies` extiende `ironclaw_safety` | No OPA externo |
+
+## Hitos alcanzados
+
+- **2026-04-29 — Hito v7**: primera conversación tool-calling end-to-end
+  en Asus. `jarvis-chat run` → "Lista los 5 procesos que más memoria
+  consumen" → IronClaw razona → invoca `process.list` MCP → respuesta
+  natural ("qs es el que más consume"). jarvis-os vivo en hardware target.
+
+## Pendiente próximo
+
+- Validar voice_daemon en Asus (`./scripts/setup.sh` + `./scripts/run.sh`,
+  decir "hey jarvis qué hora es", verificar transcript correcto).
+- Cabledo voice → IronClaw: cliente Rust o bash que lea
+  `transcript_final` del WS, inyecte a `ironclaw chat`, mande respuesta
+  como `speak` al daemon.
+- F1.3.c TTS: `Speaker.synthesize` real con ElevenLabs Flash + playback
+  duplex sounddevice + emit `tts_amplitude` al hub.
+- F2 HUD ring: Tauri layer-shell, anillo cyan WebGL reactivo a
+  `tts_amplitude`.
 
 ## Referencias
 
@@ -139,5 +196,7 @@ Si no aparece la entrada EFI: revisar que la ISO se generó con
 - IronClaw upstream (este mismo repo): [README.md](README.md)
 - IronClaw ↔ OpenClaw paridad: [FEATURE_PARITY.md](FEATURE_PARITY.md)
 - Hyprland docs: <https://wiki.hyprland.org/>
-- NixOS manual: <https://nixos.org/manual/nixos/stable/>
-- Determinate Nix: <https://docs.determinate.systems/>
+- end-4/dots-hyprland: <https://github.com/end-4/dots-hyprland>
+- openWakeWord: <https://github.com/dscripka/openWakeWord>
+- silero-vad: <https://github.com/snakers4/silero-vad>
+- faster-whisper: <https://github.com/SYSTRAN/faster-whisper>
