@@ -41,7 +41,14 @@ class WakeWordDetector:
     def __init__(
         self,
         model_name: str = "hey_jarvis",
-        threshold: float = 0.5,
+        # Threshold 0.1 calibrado para pronunciación española de "hey jarvis":
+        # el modelo built-in viene entrenado con TTS inglés (/dʒɑɹvɪs/) y
+        # nuestra /jaɾβis/ marca scores ~0.08-0.15 (vs 0.5+ que un nativo
+        # inglés produciría). El cooldown 1s post-utterance del orquestador
+        # filtra los false positives ocasionales. Un custom wake word
+        # entrenado con TTS español queda como próximo paso si esto no es
+        # suficientemente fiable.
+        threshold: float = 0.1,
         sample_rate: int = 16000,
         inference_framework: str = "onnx",
         debug_log_period_s: float = 1.0,
