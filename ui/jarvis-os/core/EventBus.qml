@@ -24,7 +24,12 @@ QtObject {
     signal eventLogged(var ev)
 
     property var ws: WebSocket {
-        url: "ws://127.0.0.1:8080/api/chat/ws"
+        // Loopback-only token. Mirror this value in ~/.ironclaw/.env as
+        // GATEWAY_AUTH_TOKEN. The web gateway accepts the token via the
+        // ?token= query param on /api/chat/ws (browser EventSource/WS
+        // can't set Authorization headers, so this is the canonical path
+        // documented in src/channels/web/CLAUDE.md).
+        url: "ws://127.0.0.1:8080/api/chat/ws?token=jarvis-os-local-token"
         active: true
         // Qt 6 requires explicit signal-handler parameters; auto-injection
         // is deprecated since Qt 5.15.

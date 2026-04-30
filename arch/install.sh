@@ -218,6 +218,9 @@ IRONCLAW_PROFILE=local
 GATEWAY_ENABLED=true
 HTTP_HOST=127.0.0.1
 HTTP_PORT=8080
+# Token de auth fijo para que jarvis_ui se conecte al gateway. Loopback only.
+# (Cambiar por uno random + leerlo desde QML vía FileView si se expone a LAN.)
+GATEWAY_AUTH_TOKEN=jarvis-os-local-token
 # API keys del operador deben ir aquí (Anthropic, ElevenLabs):
 # ANTHROPIC_API_KEY=...
 # ELEVENLABS_API_KEY=...
@@ -235,6 +238,14 @@ if ! grep -q "^GATEWAY_ENABLED=" "$HOME/.ironclaw/.env" 2>/dev/null; then
         echo "GATEWAY_ENABLED=true"
         echo "HTTP_HOST=127.0.0.1"
         echo "HTTP_PORT=8080"
+    } >> "$HOME/.ironclaw/.env"
+fi
+
+if ! grep -q "^GATEWAY_AUTH_TOKEN=" "$HOME/.ironclaw/.env" 2>/dev/null; then
+    log "Añadiendo GATEWAY_AUTH_TOKEN a ~/.ironclaw/.env (consumido por jarvis_ui)..."
+    {
+        echo "# Token de auth fijo para que jarvis_ui se conecte al gateway. Loopback only."
+        echo "GATEWAY_AUTH_TOKEN=jarvis-os-local-token"
     } >> "$HOME/.ironclaw/.env"
 fi
 
