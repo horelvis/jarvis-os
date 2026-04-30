@@ -1,3 +1,7 @@
+> **OBSOLETED 2026-04-30** — Esta spec proponía un extension layer en bash + manifest TOML con motor `apply.sh`. Quedó obsoleta cuando el scope cambió de "OS con capas externas" a "UI sobre IronClaw como motor". Reemplazada por `2026-04-30-jarvis-os-v0.3-ui-architecture-design.md`. Conservada como referencia histórica.
+
+---
+
 # jarvis-os extension layer — design
 
 **Date:** 2026-04-29
