@@ -13,22 +13,20 @@ QtObject {
         onTriggered: hotkeys.overrideShowAll = false
     }
 
-    // Listen on UNIX socket for TOGGLE messages from jarvis-ui-toggle.sh.
-    // Quickshell.Io.Socket is the standard way to consume per-line text.
-    property var socket: Socket {
-        path: "/tmp/jarvis-ui.sock"
-        listening: true
-        onLineReceived: function(line) {
-            switch (line.trim()) {
-            case "TOGGLE_SHOW":
-                hotkeys.overrideShowAll = !hotkeys.overrideShowAll;
-                if (hotkeys.overrideShowAll) hotkeys.autoHideTimer.restart();
-                else hotkeys.autoHideTimer.stop();
-                break;
-            case "TOGGLE_HIDE":
-                hotkeys.overrideHideAll = !hotkeys.overrideHideAll;
-                break;
-            }
+    // IPC entry point for hotkey scripts. Invoked from Hyprland keybinds via:
+    //   qs ipc call jarvis-ui toggleShow
+    //   qs ipc call jarvis-ui toggleHide
+    property var ipc: IpcHandler {
+        target: "jarvis-ui"
+
+        function toggleShow(): void {
+            hotkeys.overrideShowAll = !hotkeys.overrideShowAll;
+            if (hotkeys.overrideShowAll) hotkeys.autoHideTimer.restart();
+            else hotkeys.autoHideTimer.stop();
+        }
+
+        function toggleHide(): void {
+            hotkeys.overrideHideAll = !hotkeys.overrideHideAll;
         }
     }
 }

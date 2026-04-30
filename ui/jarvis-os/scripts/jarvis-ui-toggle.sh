@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# jarvis-ui-toggle: send a TOGGLE command to the running jarvis_ui
-# via UNIX socket. Invoked from Hyprland keybind config.
+# jarvis-ui-toggle: invoke a TOGGLE function on the running jarvis_ui
+# Quickshell instance via the qs IPC bridge. Called from Hyprland keybinds.
 #
 # Usage:
-#   jarvis-ui-toggle.sh show    # toggle Super+J override
+#   jarvis-ui-toggle.sh show    # toggle Super+J override (auto-hide 10s)
 #   jarvis-ui-toggle.sh hide    # toggle Super+Shift+J force-hide
 
 set -euo pipefail
 CMD="${1:-show}"
-SOCKET="/tmp/jarvis-ui.sock"
 
 case "$CMD" in
-    show) MSG="TOGGLE_SHOW" ;;
-    hide) MSG="TOGGLE_HIDE" ;;
+    show) FN="toggleShow" ;;
+    hide) FN="toggleHide" ;;
     *) echo "usage: $0 {show|hide}" >&2; exit 2 ;;
 esac
 
-if [ ! -S "$SOCKET" ]; then
-    echo "jarvis-ui not running (no socket at $SOCKET)" >&2
+if ! command -v qs >/dev/null 2>&1; then
+    echo "qs CLI not found in PATH (Quickshell not installed?)" >&2
     exit 1
 fi
 
-echo "$MSG" | socat - UNIX-CONNECT:"$SOCKET"
+qs ipc call jarvis-ui "$FN"
