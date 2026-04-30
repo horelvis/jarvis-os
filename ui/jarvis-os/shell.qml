@@ -5,4 +5,5 @@ ShellRoot {
     Ring {}
     ToolsActiveWidget {}
     ThreadCostWidget {}
+    EventsStreamWidget {}
 }
