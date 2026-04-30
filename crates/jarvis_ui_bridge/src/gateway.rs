@@ -20,38 +20,53 @@ use tracing::{debug, info, warn};
 
 use crate::config::BridgeConfig;
 
-/// Run the gateway client loop. On any disconnect, sleeps with
-/// exponential backoff (1s → 30s cap) before reconnecting.
+/// Run the gateway client loop. On any disconnect, tries every
+/// configured port (primary then fallbacks). On full-list failure,
+/// sleeps with exponential backoff (1s → 30s cap) before retrying.
 pub async fn run_gateway(cfg: BridgeConfig, tx: broadcast::Sender<String>) {
     let mut backoff_secs: u64 = 1;
     loop {
-        match connect_once(&cfg, &tx).await {
-            Ok(()) => {
-                // Connection closed cleanly (server shutdown). Reset backoff.
-                backoff_secs = 1;
+        let mut connected_ok = false;
+        for port in cfg.ports_to_try() {
+            match connect_once(&cfg, port, &tx).await {
+                Ok(()) => {
+                    // Connection closed cleanly. Reset backoff and break
+                    // the port loop — we'll start over from primary.
+                    connected_ok = true;
+                    break;
+                }
+                Err(e) => {
+                    debug!("[bridge] port {port}: {e}");
+                }
             }
-            Err(e) => {
-                warn!("[bridge] gateway connect/loop failed: {e}");
-                let _ = tx.send(r#"{"type":"bridge_offline"}"#.to_string());
-                debug!("[bridge] reconnecting in {}s", backoff_secs);
-                sleep(Duration::from_secs(backoff_secs)).await;
-                backoff_secs = (backoff_secs * 2).min(30);
-            }
+        }
+        if !connected_ok {
+            warn!(
+                "[bridge] gateway unreachable on ports {:?}",
+                cfg.ports_to_try()
+            );
+            let _ = tx.send(r#"{"type":"bridge_offline"}"#.to_string());
+            debug!("[bridge] reconnecting in {}s", backoff_secs);
+            sleep(Duration::from_secs(backoff_secs)).await;
+            backoff_secs = (backoff_secs * 2).min(30);
+        } else {
+            backoff_secs = 1;
         }
     }
 }
 
 async fn connect_once(
     cfg: &BridgeConfig,
+    port: u16,
     tx: &broadcast::Sender<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let url = cfg.ws_url();
+    let url = cfg.ws_url_for_port(port);
     info!("[bridge] connecting to {}", url);
 
     // El handler del gateway requiere Origin header válido (loopback
     // origin). Construímos la request manualmente con ese header.
     let uri: Uri = url.parse()?;
-    let host = format!("{}:{}", cfg.gateway_host, cfg.gateway_port);
+    let host = format!("{}:{}", cfg.gateway_host, port);
     let req = Request::builder()
         .uri(uri)
         .header("Host", host)

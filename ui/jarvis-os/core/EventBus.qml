@@ -24,28 +24,17 @@ QtObject {
     signal responseEmitted(string threadId)
     signal eventLogged(var ev)
 
-    // Resolve socket path from XDG_RUNTIME_DIR (set by systemd-user / pam).
-    readonly property string socketPath:
-        (Qt.application.arguments[0] ? "" : "")  // dummy to silence warning
-        + (Qt.platform.os === "linux"
-            ? (Qt.application.applicationDirPath, "/run/user/" + (
-                Qt.application.processId
-                ? "" : ""
-              )))
+    // Bridge socket. systemd-user puts XDG_RUNTIME_DIR=/run/user/<uid>;
+    // for the loopback case the UID is the user's (typically 1000 on
+    // single-user Arch). The bridge service writes the socket here.
+    readonly property string socketPath: "/run/user/1000/jarvis-ui-bridge.sock"
 
     // Pipe NDJSON from the bridge socket via `socat`. The bridge writes
-    // one JSON event per line; SplitParser slices on `\n` and dispatches.
+    // one JSON event per line; SplitParser slices on `\n`.
     property var reader: Process {
-        // socat is more robust than nc for long-lived UNIX-CONNECT streams.
-        command: [
-            "socat",
-            "-u",
-            "UNIX-CONNECT:" + bus._socketPath(),
-            "-"
-        ]
+        command: ["socat", "-u", "UNIX-CONNECT:" + bus.socketPath, "-"]
         running: true
 
-        // Restart on exit (bridge may not be up yet at boot).
         onExited: (exitCode, exitStatus) => {
             console.warn("[EventBus] socat exited code=" + exitCode + ", reconnect in 1s");
             bus.connected = false;
@@ -69,16 +58,8 @@ QtObject {
         }
     }
 
-    // Resolve the bridge socket path. Defaults to /run/user/<uid>/jarvis-ui-bridge.sock.
-    function _socketPath() {
-        // QML doesn't expose getuid() — fallback chain: env var,
-        // /run/user/1000/, /tmp/jarvis-ui-bridge.sock.
-        var env = Qt.application.arguments;  // not env, but harmless
-        // Best-effort default. install.sh sets this via systemd unit env.
-        return "/run/user/1000/jarvis-ui-bridge.sock";
-    }
-
     function _handleLine(text) {
+        if (!text || text.length === 0) return;
         var ev;
         try {
             ev = JSON.parse(text);

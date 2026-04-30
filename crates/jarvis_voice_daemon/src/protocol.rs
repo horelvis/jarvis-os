@@ -14,6 +14,11 @@
 //!
 //! Referencia: https://elevenlabs.io/docs/conversational-ai/api-reference/conversational-ai/websocket
 
+// Wire DTOs: algunos campos se deserializan del servidor pero no siempre
+// se leen en runtime (debug/log/futuro use). Mantenemos los structs
+// completos por contrato; silenciar dead_code es la práctica para esto.
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
