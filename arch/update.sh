@@ -49,7 +49,6 @@ log "Branch: $(cd "$JARVIS_OS_DIR" && git branch --show-current 2>/dev/null || e
 log "Compilando crates Rust (cargo decide qué rebuild)..."
 cd "$JARVIS_OS_DIR"
 cargo build --release --bin ironclaw
-cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
 cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
 ##############################################
@@ -57,7 +56,7 @@ cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 ##############################################
 
 # Compara hash por binario; reinstala solo si difiere para evitar restarts innecesarios.
-for bin in ironclaw jarvis-linux-mcp jarvis-voice-daemon; do
+for bin in ironclaw jarvis-voice-daemon; do
     NEW_BIN="$JARVIS_OS_DIR/target/release/$bin"
     DST_BIN="/usr/local/bin/$bin"
 
@@ -180,12 +179,6 @@ fi
 # Step 5: Restart servicios afectados        #
 ##############################################
 
-if systemctl --user is-active jarvis-mcp-register.service >/dev/null 2>&1; then
-    log "Restart jarvis-mcp-register para que recoja binary actualizado..."
-    systemctl --user restart jarvis-mcp-register.service || \
-        warn "Restart falló; revisar logs con journalctl --user -u jarvis-mcp-register"
-fi
-
 if systemctl --user is-active jarvis-voice-daemon.service >/dev/null 2>&1; then
     log "Restart jarvis-voice-daemon para recoger binary actualizado..."
     systemctl --user restart jarvis-voice-daemon.service || \
@@ -198,17 +191,9 @@ fi
 
 log "Verificando integración con IronClaw..."
 if command -v ironclaw >/dev/null 2>&1; then
-    if ironclaw mcp list 2>&1 | grep -q "jarvis-linux"; then
-        log "✓ jarvis-linux registrado en IronClaw."
-        if ironclaw mcp test jarvis-linux 2>&1 | tail -10 | grep -q "Available tools"; then
-            log "✓ jarvis-linux responde a tools/list."
-        else
-            warn "jarvis-linux registrado pero `mcp test` no devolvió tools."
-        fi
-    else
-        warn "jarvis-linux NO registrado en IronClaw. Ejecuta:"
-        warn "  ironclaw mcp add jarvis-linux --transport stdio --command jarvis-linux-mcp --arg mcp-server"
-    fi
+    log "✓ ironclaw disponible. Las jarvis-os system tools (process_list, journal_query,"
+    log "  systemd_unit_status, network_status, btrfs_snapshot, polkit_check, policy_evaluate)"
+    log "  se registran in-process al arranque del agente."
 else
     warn "ironclaw no disponible en PATH. ¿Está instalado?"
 fi

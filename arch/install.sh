@@ -6,7 +6,7 @@
 #   1. Verifica que estás en Arch.
 #   2. Instala dependencias base + paru (AUR helper).
 #   3. Instala end-4 dots-hyprland (illogical-impulse) via su instalador upstream.
-#   4. Compila los crates Rust de jarvis-os (jarvis_linux_mcp).
+#   4. Compila los crates Rust de jarvis-os (ironclaw + jarvis_voice_daemon).
 #   5. Instala binarios + systemd-user services.
 #   6. Configura wallpaper + secrets + ~/.ironclaw/.env.
 #   7. Configura snapper para snapshots Btrfs (rollback).
@@ -85,13 +85,12 @@ if [ ! -d "$HOME/dots-hyprland" ]; then
 fi
 
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
-log "Compilando ironclaw + jarvis_linux_mcp + jarvis_voice_daemon (release)..."
+log "Compilando ironclaw + jarvis_voice_daemon (release)..."
 log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
 cargo build --release --bin ironclaw
-cargo build --release -p jarvis_linux_mcp --bin jarvis-linux-mcp
 cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
-for bin in ironclaw jarvis-linux-mcp jarvis-voice-daemon; do
+for bin in ironclaw jarvis-voice-daemon; do
     src="$JARVIS_OS_DIR/target/release/$bin"
     if [ -f "$src" ]; then
         sudo install -Dm755 "$src" "/usr/local/bin/$bin"
@@ -203,8 +202,7 @@ log "PRÓXIMOS PASOS MANUALES:"
 log "  1. cd ~/dots-hyprland && ./setup install"
 log "     (instala el shell illogical-impulse interactivamente)"
 log "  2. Edita ~/.ironclaw/.env con tus API keys reales."
-log "  3. systemctl --user enable --now jarvis-mcp-register.service"
-log "  4. logout / login para entrar a Hyprland + jarvis-os"
-log "  5. ironclaw mcp test jarvis-linux  # verifica las 8 tools"
-log "  6. jarvis-chat run                  # primera conversación"
+log "  3. logout / login para entrar a Hyprland + jarvis-os"
+log "  4. jarvis-chat run                  # primera conversación"
+log "                                      # (jarvis-os system tools registradas in-process)"
 log "═══════════════════════════════════════════════════"
