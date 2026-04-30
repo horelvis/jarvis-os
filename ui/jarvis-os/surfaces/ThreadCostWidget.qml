@@ -18,10 +18,10 @@ PanelWindow {
     WlrLayershell.exclusiveZone: 0
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // Smart visibility: appear when a thread is active.
-    visible: visibleByActivity || forceShown
+    // Smart visibility: appear when a thread is active, unless force-hidden.
+    visible: !Hotkeys.overrideHideAll && (visibleByActivity || forceShown)
     property bool visibleByActivity: EventBus.currentThreadId !== ""
-    property bool forceShown: false
+    property bool forceShown: Hotkeys.overrideShowAll
 
     PanelFrame {
         anchors.fill: parent

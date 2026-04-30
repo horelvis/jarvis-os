@@ -18,9 +18,9 @@ PanelWindow {
     WlrLayershell.exclusiveZone: 0
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // Debug-only: visible only when forceShown (Super+J override).
-    visible: forceShown
-    property bool forceShown: false
+    // Debug-only: visible only when forceShown (Super+J override) and not force-hidden.
+    visible: !Hotkeys.overrideHideAll && forceShown
+    property bool forceShown: Hotkeys.overrideShowAll
 
     PanelFrame {
         anchors.fill: parent

@@ -24,10 +24,10 @@ PanelWindow {
     WlrLayershell.exclusiveZone: 0
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // Smart visibility: appear while any tool is running.
-    visible: visibleByActivity || forceShown
+    // Smart visibility: appear while any tool is running, unless force-hidden.
+    visible: !Hotkeys.overrideHideAll && (visibleByActivity || forceShown)
     property bool visibleByActivity: Object.keys(EventBus.activeTools).length > 0
-    property bool forceShown: false  // wired to hotkey in M6.b4
+    property bool forceShown: Hotkeys.overrideShowAll
 
     PanelFrame {
         id: frame
