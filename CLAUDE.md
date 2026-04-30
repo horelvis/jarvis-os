@@ -84,7 +84,17 @@ Safety logic lives in `crates/ironclaw_safety/`, skills in `crates/ironclaw_skil
 
 ```
 crates/
-└── ironclaw_safety/    # Extracted: prompt injection, validation, leak detection, policy
+├── ironclaw_safety/    # Extracted: prompt injection, validation, leak detection, policy
+├── jarvis_policies/    # ALLOW/CONFIRM/DENY policy engine for system actions
+├── jarvis_system_tools/ # Adapters (procfs, D-Bus): process, journal, systemd,
+│                       #  network, polkit, btrfs. Tool impls live in
+│                       #  src/tools/builtin/jarvis_system/ (avoids dep cycle)
+└── jarvis_voice_daemon/ # Rust + cpal + tokio-tungstenite + ElevenLabs Convai cloud
+
+ui/                     # Quickshell QML — desktop UI for jarvis-os v0.3
+└── jarvis-os/          # shell.qml + theme/ + core/ + surfaces/ + components/ + scripts/
+                        # Run dev: quickshell -p ui/jarvis-os
+                        # Install: copies to /usr/share/jarvis-os/qml/
 
 src/
 ├── lib.rs              # Library root, module declarations

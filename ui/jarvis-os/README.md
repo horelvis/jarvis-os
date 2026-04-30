@@ -28,6 +28,22 @@ Quickshell hot-reloads QML files on save.
 - Qt 6: base, declarative, websockets
 - Wayland compositor with `wlr-layer-shell` support (Hyprland, sway, river)
 
+## Deployment
+
+The `arch/install.sh` recipe copies `ui/jarvis-os/` to `/usr/share/jarvis-os/qml/`
+and enables `jarvis-ui.service` (systemd-user). The service launches:
+
+```
+quickshell -p /usr/share/jarvis-os/qml
+```
+
+Hotkeys (`Super+J`, `Super+Shift+J`) require the corresponding Hyprland keybinds
+which are appended by install.sh to `arch/configs/hyprland/keybinds.conf`. The
+keybinds invoke `scripts/jarvis-ui-toggle.sh` which writes to the UNIX socket
+`/tmp/jarvis-ui.sock` listened by `Hotkeys.qml`.
+
 ## Architecture reference
 
-See `docs/superpowers/specs/2026-04-30-jarvis-os-v0.3-ui-architecture-design.md`.
+See `docs/superpowers/specs/2026-04-30-jarvis-os-v0.3-ui-architecture-design.md`
+and the implementation plan
+`docs/superpowers/plans/2026-04-30-jarvis-os-v0.3-ui-architecture.md`.
