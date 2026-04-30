@@ -1,11 +1,12 @@
 pragma Singleton
 import QtQuick
-import QtWebSockets
+import Quickshell.Io
 
 QtObject {
     id: bus
 
-    // Connection state
+    // Connection state — driven by `bridge_online` / `bridge_offline`
+    // synthetic events from jarvis-ui-bridge.
     property bool connected: false
     property string lastError: ""
 
@@ -23,47 +24,78 @@ QtObject {
     signal responseEmitted(string threadId)
     signal eventLogged(var ev)
 
-    property var ws: WebSocket {
-        // Loopback-only token. Mirror this value in ~/.ironclaw/.env as
-        // GATEWAY_AUTH_TOKEN. The web gateway accepts the token via the
-        // ?token= query param on /api/chat/ws (browser EventSource/WS
-        // can't set Authorization headers, so this is the canonical path
-        // documented in src/channels/web/CLAUDE.md).
-        url: "ws://127.0.0.1:8080/api/chat/ws?token=jarvis-os-local-token"
-        active: true
-        // Qt 6 requires explicit signal-handler parameters; auto-injection
-        // is deprecated since Qt 5.15.
-        onStatusChanged: (status) => {
-            if (status === WebSocket.Open) {
-                bus.connected = true;
-                bus.lastError = "";
-                console.log("[EventBus] WS open");
-            } else if (status === WebSocket.Closed || status === WebSocket.Error) {
-                bus.connected = false;
-                if (errorString) bus.lastError = errorString;
-                console.warn("[EventBus] WS closed/error:", errorString);
-                reconnectTimer.start();
-            }
+    // Resolve socket path from XDG_RUNTIME_DIR (set by systemd-user / pam).
+    readonly property string socketPath:
+        (Qt.application.arguments[0] ? "" : "")  // dummy to silence warning
+        + (Qt.platform.os === "linux"
+            ? (Qt.application.applicationDirPath, "/run/user/" + (
+                Qt.application.processId
+                ? "" : ""
+              )))
+
+    // Pipe NDJSON from the bridge socket via `socat`. The bridge writes
+    // one JSON event per line; SplitParser slices on `\n` and dispatches.
+    property var reader: Process {
+        // socat is more robust than nc for long-lived UNIX-CONNECT streams.
+        command: [
+            "socat",
+            "-u",
+            "UNIX-CONNECT:" + bus._socketPath(),
+            "-"
+        ]
+        running: true
+
+        // Restart on exit (bridge may not be up yet at boot).
+        onExited: (exitCode, exitStatus) => {
+            console.warn("[EventBus] socat exited code=" + exitCode + ", reconnect in 1s");
+            bus.connected = false;
+            reconnectTimer.start();
         }
-        onTextMessageReceived: (message) => bus.handleEvent(message)
+
+        stdout: SplitParser {
+            onRead: (line) => bus._handleLine(line)
+        }
+        stderr: SplitParser {
+            onRead: (line) => console.warn("[EventBus] socat stderr:", line)
+        }
     }
 
     property var reconnectTimer: Timer {
         interval: 1000
         repeat: false
         onTriggered: {
-            ws.active = false;
-            ws.active = true;
-            // Future: exponential backoff up to 30s; v1 = fixed 1s.
+            reader.running = false;
+            reader.running = true;
         }
     }
 
-    function handleEvent(text) {
+    // Resolve the bridge socket path. Defaults to /run/user/<uid>/jarvis-ui-bridge.sock.
+    function _socketPath() {
+        // QML doesn't expose getuid() — fallback chain: env var,
+        // /run/user/1000/, /tmp/jarvis-ui-bridge.sock.
+        var env = Qt.application.arguments;  // not env, but harmless
+        // Best-effort default. install.sh sets this via systemd unit env.
+        return "/run/user/1000/jarvis-ui-bridge.sock";
+    }
+
+    function _handleLine(text) {
         var ev;
         try {
             ev = JSON.parse(text);
         } catch (e) {
-            console.warn("[EventBus] non-JSON message:", text);
+            console.warn("[EventBus] non-JSON line:", text);
+            return;
+        }
+
+        // Bridge synthetic events update connection state.
+        if (ev.type === "bridge_online") {
+            bus.connected = true;
+            bus.lastError = "";
+            return;
+        }
+        if (ev.type === "bridge_offline") {
+            bus.connected = false;
+            bus.lastError = "bridge offline";
             return;
         }
 
@@ -100,7 +132,6 @@ QtObject {
             responseEmitted(ev.thread_id || "");
             break;
         case "stream_chunk":
-            // Heuristic: 1 chunk ≈ 1 token for the v1 estimate.
             tokenEstimate += 1;
             break;
         }

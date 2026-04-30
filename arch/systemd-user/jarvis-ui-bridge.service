@@ -1,0 +1,15 @@
+[Unit]
+Description=jarvis-os UI bridge (gateway WS → UNIX socket → Quickshell)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/jarvis-ui-bridge
+EnvironmentFile=-%h/.ironclaw/.env
+Environment=RUST_LOG=jarvis_ui_bridge=info
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
