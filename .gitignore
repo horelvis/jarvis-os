@@ -19,6 +19,9 @@ integrations/abound/tests/source_env_vars.sh
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 
+# Superpowers brainstorming visual companion sessions
+.superpowers/
+
 # Sidecar tool data
 .sidecar/
 .todos/
