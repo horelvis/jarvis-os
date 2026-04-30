@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/ironclaw_common", "crates/ironclaw_safety", "crates/ironclaw_skills", "crates/ironclaw_engine", "crates/ironclaw_gateway", "crates/ironclaw_tui", "crates/jarvis_policies", "crates/jarvis_linux_mcp", "crates/jarvis_system_tools", "crates/jarvis_voice_daemon"]
+members = [".", "crates/ironclaw_common", "crates/ironclaw_safety", "crates/ironclaw_skills", "crates/ironclaw_engine", "crates/ironclaw_gateway", "crates/ironclaw_tui", "crates/jarvis_policies", "crates/jarvis_system_tools", "crates/jarvis_voice_daemon"]
 exclude = [
     "channels-src/discord",
     "channels-src/telegram",
