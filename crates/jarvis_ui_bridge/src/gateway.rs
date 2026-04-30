@@ -36,7 +36,7 @@ pub async fn run_gateway(cfg: BridgeConfig, tx: broadcast::Sender<String>) {
                     break;
                 }
                 Err(e) => {
-                    debug!("[bridge] port {port}: {e}");
+                    warn!("[bridge] port {port} failed: {e}");
                 }
             }
         }
