@@ -104,6 +104,32 @@ done
 log "Instalando wrapper jarvis-chat..."
 sudo install -Dm755 "$JARVIS_OS_DIR/arch/scripts/jarvis-chat" /usr/local/bin/jarvis-chat
 
+# ─── Step 6b: jarvis-os UI (Quickshell QML) ───
+log "Instalando jarvis-os UI (Quickshell QML)..."
+
+# Qt6 + WebSockets desde repos oficiales.
+sudo pacman -S --noconfirm --needed qt6-base qt6-declarative qt6-websockets
+
+# Quickshell vive en AUR.
+if ! command -v quickshell >/dev/null 2>&1; then
+    log "  Instalando quickshell desde AUR..."
+    paru -S --noconfirm quickshell
+fi
+
+# Copia árbol QML al system path.
+sudo install -d /usr/share/jarvis-os/qml
+sudo cp -r "$JARVIS_OS_DIR/ui/jarvis-os"/* /usr/share/jarvis-os/qml/
+sudo chmod +x /usr/share/jarvis-os/qml/scripts/jarvis-ui-toggle.sh
+log "  ui/jarvis-os/ copiado a /usr/share/jarvis-os/qml/"
+
+# systemd-user unit (no se enable hasta que el user haga login).
+install -d "$HOME/.config/systemd/user"
+cp "$JARVIS_OS_DIR/arch/systemd-user/jarvis-ui.service" \
+    "$HOME/.config/systemd/user/jarvis-ui.service"
+systemctl --user daemon-reload
+systemctl --user enable jarvis-ui.service
+log "  jarvis-ui.service enabled (start manual: systemctl --user start jarvis-ui)"
+
 # ─── Step 7: Wallpaper jarvis-os ───
 log "Copiando wallpaper a ~/Pictures/jarvis-os/..."
 mkdir -p "$HOME/Pictures/jarvis-os"

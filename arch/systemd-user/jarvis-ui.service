@@ -1,0 +1,13 @@
+[Unit]
+Description=jarvis-os UI (Quickshell layer-shell + ring + widgets)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/quickshell -p /usr/share/jarvis-os/qml
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
