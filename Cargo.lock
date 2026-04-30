@@ -4019,6 +4019,8 @@ dependencies = [
  "ironclaw_safety",
  "ironclaw_skills",
  "ironclaw_tui",
+ "jarvis_policies",
+ "jarvis_system_tools",
  "json5",
  "jsonschema",
  "jsonwebtoken",
@@ -4320,7 +4322,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
- "ironclaw",
  "jarvis_policies",
  "procfs",
  "serde",

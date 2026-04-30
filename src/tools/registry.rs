@@ -479,6 +479,17 @@ impl ToolRegistry {
         tracing::debug!("Registered system introspection tools");
     }
 
+    /// Register the jarvis-os Linux system tools (process_list, journal_query,
+    /// systemd_unit_status, network_status, btrfs_snapshot, polkit_check,
+    /// policy_evaluate). Some adapters require D-Bus connections that are
+    /// initialized here. If the required D-Bus adapters (systemd, NetworkManager)
+    /// fail to connect, no jarvis tools are registered and a warning is logged;
+    /// IronClaw continues without them so the agent stays usable on environments
+    /// where D-Bus is unavailable.
+    pub async fn register_jarvis_system_tools(self: &Arc<Self>) {
+        crate::tools::builtin::jarvis_system::register(self).await;
+    }
+
     /// Register only orchestrator-domain tools (safe for the main process).
     ///
     /// This registers tools that don't touch the filesystem or run shell commands:

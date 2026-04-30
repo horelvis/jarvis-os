@@ -57,6 +57,7 @@ mod html_converter;
 pub mod image_analyze;
 pub mod image_edit;
 pub mod image_gen;
+pub mod jarvis_system;
 
 pub use html_converter::convert_html_to_markdown;
 pub use image_analyze::ImageAnalyzeTool;

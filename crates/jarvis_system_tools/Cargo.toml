@@ -8,7 +8,6 @@ authors = ["Horelvis Castillo Mendoza"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-ironclaw = { path = "../.." }
 jarvis_policies = { path = "../jarvis_policies" }
 
 # zbus 4 con runtime tokio (matches ironclaw + jarvis_linux_mcp).

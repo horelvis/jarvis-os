@@ -8,13 +8,13 @@
 use std::time::Instant;
 
 use async_trait::async_trait;
-use ironclaw::context::JobContext;
-use ironclaw::tools::{ApprovalRequirement, RiskLevel, Tool, ToolError, ToolOutput};
+use crate::context::JobContext;
+use crate::tools::tool::{ApprovalRequirement, RiskLevel, Tool, ToolError, ToolOutput};
 use jarvis_policies::{Action, ActionCategory, ActionContext, DefaultPolicy, PolicyEngine};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::adapter::btrfs::BtrfsAdapter;
+use jarvis_system_tools::adapter::btrfs::BtrfsAdapter;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
