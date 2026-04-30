@@ -1,0 +1,31 @@
+[package]
+name = "jarvis_system_tools"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "System tools (process, journald, systemd, networkd, polkit, btrfs) registered as IronClaw built-in tools."
+authors = ["Horelvis Castillo Mendoza"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+ironclaw = { path = "../.." }
+jarvis_policies = { path = "../jarvis_policies" }
+
+# zbus 4 con runtime tokio (matches ironclaw + jarvis_linux_mcp).
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+thiserror = "2"
+tracing = "0.1"
+
+# Sellos de tiempo en ActionContext (heredado de jarvis_policies API).
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+
+# Enumeración de procesos vía /proc.
+procfs = "0.17"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
