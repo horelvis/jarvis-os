@@ -213,10 +213,11 @@ LIBSQL_PATH=/home/jarvis/.ironclaw/jarvis.db
 AGENT_NAME=jarvis
 HEARTBEAT_ENABLED=false
 IRONCLAW_PROFILE=local
-# Web gateway expuesto en localhost:3000 (consumido por jarvis_ui).
+# Web gateway expuesto en localhost:8080 (consumido por jarvis_ui).
+# IronClaw reusa HTTP_PORT para servir el gateway cuando GATEWAY_ENABLED=true.
 GATEWAY_ENABLED=true
-GATEWAY_HOST=127.0.0.1
-GATEWAY_PORT=3000
+HTTP_HOST=127.0.0.1
+HTTP_PORT=8080
 # API keys del operador deben ir aquí (Anthropic, ElevenLabs):
 # ANTHROPIC_API_KEY=...
 # ELEVENLABS_API_KEY=...
@@ -229,10 +230,11 @@ if ! grep -q "^GATEWAY_ENABLED=" "$HOME/.ironclaw/.env" 2>/dev/null; then
     log "Añadiendo GATEWAY_ENABLED=true a ~/.ironclaw/.env (requerido por jarvis_ui)..."
     {
         echo ""
-        echo "# Web gateway expuesto en localhost:3000 (consumido por jarvis_ui)."
+        echo "# Web gateway expuesto en localhost:8080 (consumido por jarvis_ui)."
+        echo "# IronClaw reusa HTTP_PORT para servir el gateway cuando GATEWAY_ENABLED=true."
         echo "GATEWAY_ENABLED=true"
-        echo "GATEWAY_HOST=127.0.0.1"
-        echo "GATEWAY_PORT=3000"
+        echo "HTTP_HOST=127.0.0.1"
+        echo "HTTP_PORT=8080"
     } >> "$HOME/.ironclaw/.env"
 fi
 

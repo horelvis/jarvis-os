@@ -24,7 +24,7 @@ QtObject {
     signal eventLogged(var ev)
 
     property var ws: WebSocket {
-        url: "ws://127.0.0.1:3000/api/chat/ws"
+        url: "ws://127.0.0.1:8080/api/chat/ws"
         active: true
         // Qt 6 requires explicit signal-handler parameters; auto-injection
         // is deprecated since Qt 5.15.
