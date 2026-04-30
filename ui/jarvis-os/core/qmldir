@@ -1,0 +1,3 @@
+singleton EventBus 1.0 EventBus.qml
+singleton IronclawRest 1.0 IronclawRest.qml
+singleton Hotkeys 1.0 Hotkeys.qml

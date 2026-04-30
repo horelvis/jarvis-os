@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import "surfaces"
 
 ShellRoot {
     Ring {}
