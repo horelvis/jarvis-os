@@ -210,15 +210,30 @@ if [ ! -f "$HOME/.ironclaw/.env" ]; then
     cat > "$HOME/.ironclaw/.env" <<'EOF'
 DATABASE_BACKEND=libsql
 LIBSQL_PATH=/home/jarvis/.ironclaw/jarvis.db
-DATABASE_URL=unused://libsql
 AGENT_NAME=jarvis
 HEARTBEAT_ENABLED=false
 IRONCLAW_PROFILE=local
+# Web gateway expuesto en localhost:3000 (consumido por jarvis_ui).
+GATEWAY_ENABLED=true
+GATEWAY_HOST=127.0.0.1
+GATEWAY_PORT=3000
 # API keys del operador deben ir aquí (Anthropic, ElevenLabs):
 # ANTHROPIC_API_KEY=...
 # ELEVENLABS_API_KEY=...
 EOF
     log "Plantilla creada en ~/.ironclaw/.env. Edita las API keys antes de usar."
+fi
+
+# Idempotente: si .env ya existe pero no tiene GATEWAY_ENABLED, lo apenda.
+if ! grep -q "^GATEWAY_ENABLED=" "$HOME/.ironclaw/.env" 2>/dev/null; then
+    log "Añadiendo GATEWAY_ENABLED=true a ~/.ironclaw/.env (requerido por jarvis_ui)..."
+    {
+        echo ""
+        echo "# Web gateway expuesto en localhost:3000 (consumido por jarvis_ui)."
+        echo "GATEWAY_ENABLED=true"
+        echo "GATEWAY_HOST=127.0.0.1"
+        echo "GATEWAY_PORT=3000"
+    } >> "$HOME/.ironclaw/.env"
 fi
 
 log "═══════════════════════════════════════════════════"

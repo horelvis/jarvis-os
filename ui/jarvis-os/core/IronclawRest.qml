@@ -4,7 +4,7 @@ import QtQuick
 QtObject {
     id: rest
 
-    readonly property string baseUrl: "http://127.0.0.1:8080"
+    readonly property string baseUrl: "http://127.0.0.1:3000"
 
     function getThreads(callback) {
         var req = new XMLHttpRequest();
