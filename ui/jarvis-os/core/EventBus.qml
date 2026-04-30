@@ -26,17 +26,21 @@ QtObject {
     property var ws: WebSocket {
         url: "ws://127.0.0.1:8080/api/chat/ws"
         active: true
-        onStatusChanged: {
+        // Qt 6 requires explicit signal-handler parameters; auto-injection
+        // is deprecated since Qt 5.15.
+        onStatusChanged: (status) => {
             if (status === WebSocket.Open) {
                 bus.connected = true;
                 bus.lastError = "";
+                console.log("[EventBus] WS open");
             } else if (status === WebSocket.Closed || status === WebSocket.Error) {
                 bus.connected = false;
                 if (errorString) bus.lastError = errorString;
+                console.warn("[EventBus] WS closed/error:", errorString);
                 reconnectTimer.start();
             }
         }
-        onTextMessageReceived: bus.handleEvent(message)
+        onTextMessageReceived: (message) => bus.handleEvent(message)
     }
 
     property var reconnectTimer: Timer {
