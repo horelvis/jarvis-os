@@ -73,6 +73,12 @@ pass "leftover state cleaned"
 # ─── Launch IronClaw (full tty detach) ───────────────────────────────
 section "Launch IronClaw (TUI off, logs to $LOG)"
 
+# --no-db skips the DB-stored settings read so env vars actually take
+# effect. Without it, db_first_optional_string reads cli_mode="tui" from
+# the user's settings DB → TUI loads → suppress_stderr=true → fmt_layer
+# is None → /tmp/ironclaw-smoke.log stays empty. With --no-db the env
+# overrides win and stderr captures tracing. The smoke does NOT need
+# DB-backed state (no LLM history, no thread store, no sandbox jobs).
 # CLI_ENABLED=false + CLI_MODE=disabled → no TUI, no REPL channel
 # nohup + disown + < /dev/null → fully detached, can't get SIGTTIN
 # stderr → log file; stdout → /dev/null
@@ -80,7 +86,7 @@ CLI_ENABLED=false \
 CLI_MODE=disabled \
 GATEWAY_ENABLED=false \
 RUST_LOG=ironclaw::channels::local_ipc=trace,ironclaw::bridge::router=debug,ironclaw::channels::web::platform::sse=debug,ironclaw=info \
-    nohup "$BINARY" run < /dev/null > /dev/null 2> "$LOG" &
+    nohup "$BINARY" --no-db run < /dev/null > /dev/null 2> "$LOG" &
 PID=$!
 disown
 info "PID: $PID"
