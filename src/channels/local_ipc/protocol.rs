@@ -224,3 +224,50 @@ mod command_tests {
         assert!(res.is_err());
     }
 }
+
+pub const PROTOCOL_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IpcHello {
+    pub protocol_version: u32,
+    pub local_user_id: String,
+}
+
+/// Envelope for transport-only synthetic events that don't originate
+/// from the engine `AppEvent` log. Serialized with the same `{"type":
+/// "...", ...}` shape so the QML / voice-daemon parser only needs one
+/// case branch.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TransportEvent {
+    IpcHello(IpcHello),
+    Error { kind: IpcErrorKind, detail: String },
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+
+    #[test]
+    fn hello_serializes_with_type_tag() {
+        let ev = TransportEvent::IpcHello(IpcHello {
+            protocol_version: 1,
+            local_user_id: "owner".into(),
+        });
+        let s = serde_json::to_string(&ev).unwrap();
+        assert!(s.contains("\"type\":\"ipc_hello\""));
+        assert!(s.contains("\"protocol_version\":1"));
+        assert!(s.contains("\"local_user_id\":\"owner\""));
+    }
+
+    #[test]
+    fn error_serializes_snake_case_kind() {
+        let ev = TransportEvent::Error {
+            kind: IpcErrorKind::CommandInvalid,
+            detail: "bad json".into(),
+        };
+        let s = serde_json::to_string(&ev).unwrap();
+        assert!(s.contains("\"type\":\"error\""));
+        assert!(s.contains("\"kind\":\"command_invalid\""));
+    }
+}
