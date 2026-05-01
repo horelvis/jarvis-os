@@ -1,3 +1,5 @@
+#![allow(dead_code)] // populated by Track C; production callers arrive in Track E
+
 use std::path::PathBuf;
 
 const ENV_OVERRIDE: &str = "IRONCLAW_LOCAL_SOCKET";
