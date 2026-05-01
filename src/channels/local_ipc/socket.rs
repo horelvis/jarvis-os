@@ -135,3 +135,74 @@ mod tests {
         );
     }
 }
+
+use std::time::Duration;
+use tokio::net::UnixStream;
+use tokio::time::timeout;
+
+use crate::channels::local_ipc::error::LocalIpcError;
+
+/// Inspect an existing socket file and remove it if no live IronClaw
+/// instance is listening. Returns `Ok(true)` if the orphan was cleaned
+/// (or never existed), `Ok(false)` if a live instance currently owns
+/// it, and `Err` on cleanup failure.
+pub async fn cleanup_orphan_socket(path: &std::path::Path) -> Result<bool, LocalIpcError> {
+    if !tokio::fs::try_exists(path).await? {
+        return Ok(true);
+    }
+    // Try to connect. A live owner replies; an orphan errors out.
+    match timeout(Duration::from_millis(100), UnixStream::connect(path)).await {
+        Ok(Ok(_)) => Ok(false), // live owner — caller must abort startup
+        Ok(Err(_)) | Err(_) => {
+            tokio::fs::remove_file(path)
+                .await
+                .map_err(|e| LocalIpcError::CleanupFailed {
+                    path: path.to_path_buf(),
+                    reason: e.to_string(),
+                })?;
+            Ok(true)
+        }
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn missing_path_is_a_clean_orphan() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("nope.sock");
+        assert!(cleanup_orphan_socket(&path).await.unwrap());
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn dead_socket_file_gets_unlinked() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("dead.sock");
+        // Create a regular file at the socket path to simulate an orphan
+        // left over from a crashed process.
+        tokio::fs::write(&path, b"orphan").await.unwrap();
+        assert!(path.exists());
+        assert!(cleanup_orphan_socket(&path).await.unwrap());
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn live_listener_blocks_cleanup() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("live.sock");
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+        // Spawn an accept loop so connect() actually succeeds.
+        let _accept_task = tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+        // Give the listener a moment to be ready.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let result = cleanup_orphan_socket(&path).await.unwrap();
+        assert!(!result, "live owner must block cleanup");
+        assert!(path.exists(), "live socket must NOT be unlinked");
+    }
+}
