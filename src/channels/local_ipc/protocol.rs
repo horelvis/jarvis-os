@@ -1,3 +1,8 @@
+// File-level dead_code allow stays until Tracks D/E wire the consumers
+// (client.rs reads ClientCommand, channel_impl.rs constructs IpcHello,
+// control.rs uses ApprovalAction). Remove once every type has a caller.
+#![allow(dead_code)]
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +41,10 @@ impl ClientId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
 }
 
 impl TryFrom<String> for ClientId {
@@ -55,6 +64,12 @@ impl AsRef<str> for ClientId {
 impl fmt::Display for ClientId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl From<ClientId> for String {
+    fn from(id: ClientId) -> Self {
+        id.0
     }
 }
 
