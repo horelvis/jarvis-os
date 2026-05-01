@@ -121,6 +121,14 @@ src/
 │   ├── cli/            # Full TUI with Ratatui
 │   ├── http.rs         # HTTP webhook (axum) with secret validation
 │   ├── webhook_server.rs # Unified HTTP server composing all webhook routes
+│   ├── local_ipc/      # Native UNIX socket IPC for jarvis-os UI + voice daemon (NDJSON)
+│   │   ├── mod.rs          # create() factory + LocalIpcChannel re-exports
+│   │   ├── error.rs        # LocalIpcError
+│   │   ├── protocol.rs     # ClientCommand, ClientId, IpcErrorKind, TransportEvent
+│   │   ├── socket.rs       # resolve_socket_path, cleanup_orphan_socket, run_listener
+│   │   ├── client.rs       # ClientSession reader + writer tasks
+│   │   ├── control.rs      # build_control_submission (Approval/Cancel → Submission)
+│   │   └── channel_impl.rs # impl Channel for LocalIpcChannel
 │   ├── repl.rs         # Simple REPL (for testing)
 │   ├── web/            # Web gateway (browser UI) — see src/channels/web/CLAUDE.md
 │   └── wasm/           # WASM channel runtime
