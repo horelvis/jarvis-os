@@ -30,6 +30,7 @@
 mod attachments;
 mod channel;
 mod http;
+pub mod local_ipc;
 mod manager;
 pub mod relay;
 mod repl;
