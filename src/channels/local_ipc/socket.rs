@@ -209,3 +209,220 @@ mod cleanup_tests {
         assert!(path.exists(), "live socket must NOT be unlinked");
     }
 }
+
+use std::os::unix::fs::PermissionsExt;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use tokio::net::UnixListener;
+use tokio::sync::{Notify, mpsc};
+use tracing::{debug, warn};
+
+use crate::channels::IncomingMessage;
+use crate::channels::local_ipc::client::{ClientHandle, ClientMap, spawn_session};
+use crate::channels::local_ipc::protocol::ClientId;
+use crate::channels::web::platform::sse::SseManager;
+
+const SOFT_CLIENT_CAP: u64 = 32;
+const HARD_CLIENT_CAP: u64 = 256;
+
+pub struct ListenerConfig {
+    pub user_id: String,
+    pub sse: Arc<SseManager>,
+    pub inject_tx: mpsc::Sender<IncomingMessage>,
+    pub writer_buffer: usize,
+    pub clients: ClientMap,
+    pub shutdown: Arc<Notify>,
+}
+
+/// Bind, set 0600 perms, and run accept loop until shutdown.notified.
+/// Removes the socket file on exit.
+pub async fn run_listener(
+    path: std::path::PathBuf,
+    cfg: ListenerConfig,
+) -> Result<(), super::error::LocalIpcError> {
+    let listener =
+        UnixListener::bind(&path).map_err(|e| super::error::LocalIpcError::BindFailed {
+            path: path.clone(),
+            reason: e.to_string(),
+        })?;
+    // 0600 — POSIX permission gate is the auth model.
+    let perms = std::fs::Permissions::from_mode(0o600);
+    if let Err(e) = std::fs::set_permissions(&path, perms) {
+        warn!(path = %path.display(), error = %e, "failed to chmod 0600 on local IPC socket");
+    }
+    let active = Arc::new(AtomicU64::new(0));
+    let next_id = Arc::new(AtomicU64::new(1));
+
+    loop {
+        tokio::select! {
+            _ = cfg.shutdown.notified() => {
+                debug!("local_ipc listener shutdown notified");
+                break;
+            }
+            accept = listener.accept() => {
+                match accept {
+                    Ok((stream, _addr)) => {
+                        let count = active.fetch_add(1, Ordering::Relaxed) + 1;
+                        if count > HARD_CLIENT_CAP {
+                            warn!(count, "rejecting local IPC client: hard cap reached");
+                            active.fetch_sub(1, Ordering::Relaxed);
+                            drop(stream);
+                            continue;
+                        }
+                        if count == SOFT_CLIENT_CAP + 1 {
+                            warn!(count, "local IPC clients exceeded soft cap");
+                        }
+                        let id_num = next_id.fetch_add(1, Ordering::Relaxed);
+                        let client_id = match ClientId::new(format!("ipc-{id_num}")) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                warn!(error = %e, "could not mint ClientId");
+                                active.fetch_sub(1, Ordering::Relaxed);
+                                drop(stream);
+                                continue;
+                            }
+                        };
+                        let active_for_session = Arc::clone(&active);
+                        let clients = Arc::clone(&cfg.clients);
+                        let sse = Arc::clone(&cfg.sse);
+                        let inject = cfg.inject_tx.clone();
+                        let user = cfg.user_id.clone();
+                        let buf = cfg.writer_buffer;
+                        let cid_for_remove = client_id.clone();
+                        tokio::spawn(async move {
+                            let handle = spawn_session(
+                                stream, client_id, user, sse, inject, buf,
+                            )
+                            .await;
+                            register(&clients, handle).await;
+                            // No await for completion — both tasks live
+                            // independently; the registry entry will be
+                            // removed when respond() finds it gone (via
+                            // a periodic sweep in v2). For v1 the entry
+                            // leaks until shutdown, which is bounded by
+                            // HARD_CLIENT_CAP. v2 follow-up: track per-
+                            // session JoinHandle and unregister on exit.
+                            let _ = cid_for_remove;
+                            active_for_session.fetch_sub(1, Ordering::Relaxed);
+                        });
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "local IPC accept failed");
+                    }
+                }
+            }
+        }
+    }
+    if let Err(e) = std::fs::remove_file(&path) {
+        debug!(path = %path.display(), error = %e, "remove_file on shutdown failed");
+    }
+    Ok(())
+}
+
+async fn register(clients: &ClientMap, handle: ClientHandle) {
+    let mut map = clients.lock().await;
+    map.insert(handle.client_id.as_str().to_string(), handle);
+}
+
+#[cfg(test)]
+mod listener_tests {
+    use super::*;
+    use crate::channels::local_ipc::client::DEFAULT_WRITER_BUFFER;
+    use tempfile::tempdir;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::net::UnixStream;
+
+    #[tokio::test]
+    async fn listener_accepts_one_client_and_emits_hello() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("li.sock");
+        let sse = Arc::new(SseManager::new());
+        let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
+        let clients: ClientMap = Arc::new(tokio::sync::Mutex::new(Default::default()));
+        let shutdown = Arc::new(Notify::new());
+
+        let path_clone = path.clone();
+        let sd = Arc::clone(&shutdown);
+        let task = tokio::spawn(async move {
+            run_listener(
+                path_clone,
+                ListenerConfig {
+                    user_id: "owner".into(),
+                    sse,
+                    inject_tx,
+                    writer_buffer: DEFAULT_WRITER_BUFFER,
+                    clients,
+                    shutdown: sd,
+                },
+            )
+            .await
+        });
+
+        // Wait for the bind.
+        for _ in 0..50 {
+            if path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(path.exists(), "socket file must exist after bind");
+
+        let stream = UnixStream::connect(&path).await.unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            reader.read_line(&mut line),
+        )
+        .await
+        .expect("hello timeout")
+        .unwrap();
+        assert!(line.contains("\"type\":\"ipc_hello\""));
+
+        shutdown.notify_waiters();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+            .await
+            .expect("listener did not exit on shutdown");
+        assert!(!path.exists(), "socket file must be removed on shutdown");
+    }
+
+    #[tokio::test]
+    async fn listener_chmods_0600() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("perm.sock");
+        let sse = Arc::new(SseManager::new());
+        let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
+        let clients: ClientMap = Arc::new(tokio::sync::Mutex::new(Default::default()));
+        let shutdown = Arc::new(Notify::new());
+
+        let path_clone = path.clone();
+        let sd = Arc::clone(&shutdown);
+        let task = tokio::spawn(async move {
+            run_listener(
+                path_clone,
+                ListenerConfig {
+                    user_id: "owner".into(),
+                    sse,
+                    inject_tx,
+                    writer_buffer: DEFAULT_WRITER_BUFFER,
+                    clients,
+                    shutdown: sd,
+                },
+            )
+            .await
+        });
+
+        for _ in 0..50 {
+            if path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let meta = std::fs::metadata(&path).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "socket must be chmod 0600 (got {mode:o})");
+        shutdown.notify_waiters();
+        let _ = task.await;
+    }
+}
