@@ -43,9 +43,7 @@ impl BtrfsAdapter {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             // Distingue "no es btrfs" de error real.
-            if stderr.contains("not a btrfs filesystem")
-                || stderr.contains("No such file")
-            {
+            if stderr.contains("not a btrfs filesystem") || stderr.contains("No such file") {
                 return Ok(Vec::new());
             }
             return Err(Error::Internal(format!(

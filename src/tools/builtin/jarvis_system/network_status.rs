@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use async_trait::async_trait;
 use crate::context::JobContext;
 use crate::tools::tool::{Tool, ToolError, ToolOutput};
+use async_trait::async_trait;
 use jarvis_policies::{Action, ActionCategory, ActionContext, DefaultPolicy, PolicyEngine};
 use serde_json::json;
 
@@ -52,7 +52,9 @@ impl Tool for NetworkStatusTool {
             .evaluate(&action, &ActionContext::restrictive())
             .is_deny()
         {
-            return Err(ToolError::NotAuthorized("policy DENY: network_status".into()));
+            return Err(ToolError::NotAuthorized(
+                "policy DENY: network_status".into(),
+            ));
         }
 
         let status = self

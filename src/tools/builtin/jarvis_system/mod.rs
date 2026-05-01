@@ -32,9 +32,7 @@ pub async fn register(registry: &Arc<ToolRegistry>) {
     let systemd_adapter = match adapter::systemd::SystemdAdapter::connect_system().await {
         Ok(a) => Arc::new(a),
         Err(e) => {
-            warn!(
-                "systemd D-Bus unavailable: {e}; jarvis-os system tools will not be registered"
-            );
+            warn!("systemd D-Bus unavailable: {e}; jarvis-os system tools will not be registered");
             return;
         }
     };

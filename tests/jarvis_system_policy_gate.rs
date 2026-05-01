@@ -13,10 +13,10 @@
 //! at least run successfully under the restrictive default.
 
 use ironclaw::context::JobContext;
-use ironclaw::tools::{Tool, ToolError};
 use ironclaw::tools::builtin::jarvis_system::{
     policy_evaluate::PolicyEvaluateTool, process_list::ProcessListTool,
 };
+use ironclaw::tools::{Tool, ToolError};
 use jarvis_system_tools::adapter::process::ProcessAdapter;
 use serde_json::json;
 
@@ -28,9 +28,9 @@ async fn process_list_runs_when_policy_allows() {
     let out = tool.execute(json!({"limit": 1}), &ctx).await;
     match out {
         Ok(_) => {}
-        Err(other) => panic!(
-            "process_list expected ALLOW under DefaultPolicy + restrictive, got: {other:?}"
-        ),
+        Err(other) => {
+            panic!("process_list expected ALLOW under DefaultPolicy + restrictive, got: {other:?}")
+        }
     }
 }
 
@@ -48,9 +48,9 @@ async fn policy_evaluate_runs_when_policy_allows() {
         .await;
     match out {
         Ok(_) => {}
-        Err(other) => panic!(
-            "policy_evaluate must be reachable under restrictive ctx, got: {other:?}"
-        ),
+        Err(other) => {
+            panic!("policy_evaluate must be reachable under restrictive ctx, got: {other:?}")
+        }
     }
 }
 

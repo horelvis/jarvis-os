@@ -78,10 +78,7 @@ async fn connect_once(
         .body(())?;
 
     let (ws_stream, response) = connect_async(req).await?;
-    info!(
-        "[bridge] connected · status={}",
-        response.status().as_u16()
-    );
+    info!("[bridge] connected · status={}", response.status().as_u16());
     let _ = tx.send(r#"{"type":"bridge_online"}"#.to_string());
 
     let (_write, mut read) = ws_stream.split();

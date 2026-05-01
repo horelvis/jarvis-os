@@ -39,10 +39,7 @@ impl PolkitAdapter {
     /// Consulta si la sesión actual tiene autorización para `action_id`.
     /// El subject se construye como "unix-session" del PID actual,
     /// equivalente a preguntar "para mí mismo, ahora".
-    pub async fn check_authorization(
-        &self,
-        action_id: &str,
-    ) -> Result<AuthCheck> {
+    pub async fn check_authorization(&self, action_id: &str) -> Result<AuthCheck> {
         let proxy = Proxy::new(
             &self.connection,
             "org.freedesktop.PolicyKit1",
@@ -61,8 +58,7 @@ impl PolkitAdapter {
 
         let subject = ("unix-process", subject_details);
 
-        let details: std::collections::HashMap<&str, &str> =
-            std::collections::HashMap::new();
+        let details: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
 
         // Flags: 0 = sin allow_user_interaction, no preguntar; consulta pasiva.
         let flags: u32 = 0;

@@ -35,11 +35,21 @@ pub enum Inbound {
     AgentAudio(Vec<i16>),
     UserTranscript(String),
     AgentResponse(String),
-    AgentResponseCorrection { original: String, corrected: String },
-    Interruption { event_id: u64, reason: Option<String> },
-    Ping { event_id: u64 },
+    AgentResponseCorrection {
+        original: String,
+        corrected: String,
+    },
+    Interruption {
+        event_id: u64,
+        reason: Option<String>,
+    },
+    Ping {
+        event_id: u64,
+    },
     ToolCall(crate::protocol::ClientToolCall),
-    Connected { conversation_id: String },
+    Connected {
+        conversation_id: String,
+    },
     Disconnected,
 }
 
@@ -90,12 +100,11 @@ pub async fn connect(cfg: &Config) -> Result<WsClient> {
         while let Some(msg) = rx.recv().await {
             match msg {
                 Outbound::Audio(pcm) => {
-                    let bytes: Vec<u8> = pcm
-                        .iter()
-                        .flat_map(|s| s.to_le_bytes())
-                        .collect();
+                    let bytes: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
                     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    let chunk = UserAudioChunk { user_audio_chunk: &b64 };
+                    let chunk = UserAudioChunk {
+                        user_audio_chunk: &b64,
+                    };
                     let json = match serde_json::to_string(&chunk) {
                         Ok(j) => j,
                         Err(e) => {
@@ -189,36 +198,48 @@ async fn handle_text(text: &str, tx: &mpsc::Sender<Inbound>) {
     };
 
     match event {
-        ServerMessage::ConversationInitiationMetadata { conversation_initiation_metadata_event: m } => {
+        ServerMessage::ConversationInitiationMetadata {
+            conversation_initiation_metadata_event: m,
+        } => {
             tracing::info!(
                 conversation_id = %m.conversation_id,
                 input_format = %m.user_input_audio_format,
                 output_format = %m.agent_output_audio_format,
                 "ws.conversation_initiated"
             );
-            let _ = tx.send(Inbound::Connected { conversation_id: m.conversation_id }).await;
-        }
-        ServerMessage::Audio { audio_event } => {
-            match decode_audio(&audio_event.audio_base_64) {
-                Ok(pcm) => {
-                    let _ = tx.send(Inbound::AgentAudio(pcm)).await;
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "ws.audio_decode_failed");
-                }
-            }
-        }
-        ServerMessage::UserTranscript { user_transcription_event } => {
             let _ = tx
-                .send(Inbound::UserTranscript(user_transcription_event.user_transcript))
+                .send(Inbound::Connected {
+                    conversation_id: m.conversation_id,
+                })
                 .await;
         }
-        ServerMessage::AgentResponse { agent_response_event } => {
+        ServerMessage::Audio { audio_event } => match decode_audio(&audio_event.audio_base_64) {
+            Ok(pcm) => {
+                let _ = tx.send(Inbound::AgentAudio(pcm)).await;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "ws.audio_decode_failed");
+            }
+        },
+        ServerMessage::UserTranscript {
+            user_transcription_event,
+        } => {
+            let _ = tx
+                .send(Inbound::UserTranscript(
+                    user_transcription_event.user_transcript,
+                ))
+                .await;
+        }
+        ServerMessage::AgentResponse {
+            agent_response_event,
+        } => {
             let _ = tx
                 .send(Inbound::AgentResponse(agent_response_event.agent_response))
                 .await;
         }
-        ServerMessage::AgentResponseCorrection { agent_response_correction_event: c } => {
+        ServerMessage::AgentResponseCorrection {
+            agent_response_correction_event: c,
+        } => {
             let _ = tx
                 .send(Inbound::AgentResponseCorrection {
                     original: c.original_agent_response,
@@ -235,7 +256,11 @@ async fn handle_text(text: &str, tx: &mpsc::Sender<Inbound>) {
                 .await;
         }
         ServerMessage::Ping { ping_event } => {
-            let _ = tx.send(Inbound::Ping { event_id: ping_event.event_id }).await;
+            let _ = tx
+                .send(Inbound::Ping {
+                    event_id: ping_event.event_id,
+                })
+                .await;
         }
         ServerMessage::ClientToolCall { client_tool_call } => {
             let _ = tx.send(Inbound::ToolCall(client_tool_call)).await;

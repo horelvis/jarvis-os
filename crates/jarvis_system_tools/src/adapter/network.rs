@@ -88,8 +88,7 @@ impl NetworkManagerAdapter {
 
         let hostname: String = manager.get_property("Hostname").await.unwrap_or_default();
 
-        let active_paths: Vec<OwnedObjectPath> =
-            manager.get_property("ActiveConnections").await?;
+        let active_paths: Vec<OwnedObjectPath> = manager.get_property("ActiveConnections").await?;
 
         let mut active_connections = Vec::new();
         for path in active_paths {

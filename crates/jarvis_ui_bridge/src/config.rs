@@ -93,10 +93,7 @@ impl BridgeConfig {
     /// `?token=` si hay auth.
     pub fn ws_url_for_port(&self, port: u16) -> String {
         let scheme = if self.use_tls { "wss" } else { "ws" };
-        let base = format!(
-            "{scheme}://{}:{}/api/chat/ws",
-            self.gateway_host, port
-        );
+        let base = format!("{scheme}://{}:{}/api/chat/ws", self.gateway_host, port);
         match &self.gateway_auth_token {
             Some(t) => format!("{base}?token={}", urlencode(t)),
             None => base,
@@ -119,8 +116,7 @@ fn resolve_socket_path() -> Result<PathBuf, ConfigError> {
     if let Ok(custom) = env::var("JARVIS_UI_BRIDGE_SOCKET") {
         return Ok(PathBuf::from(custom));
     }
-    let runtime_dir =
-        env::var("XDG_RUNTIME_DIR").map_err(|_| ConfigError::NoRuntimeDir)?;
+    let runtime_dir = env::var("XDG_RUNTIME_DIR").map_err(|_| ConfigError::NoRuntimeDir)?;
     Ok(PathBuf::from(runtime_dir).join("jarvis-ui-bridge.sock"))
 }
 

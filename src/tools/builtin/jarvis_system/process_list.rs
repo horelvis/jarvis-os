@@ -4,9 +4,9 @@
 
 use std::time::Instant;
 
-use async_trait::async_trait;
 use crate::context::JobContext;
 use crate::tools::tool::{Tool, ToolError, ToolOutput};
+use async_trait::async_trait;
 use jarvis_policies::{Action, ActionCategory, ActionContext, DefaultPolicy, PolicyEngine};
 use serde::Deserialize;
 use serde_json::json;
@@ -78,7 +78,9 @@ impl Tool for ProcessListTool {
         let action = Action::new("process_list", ActionCategory::ReadSystem);
         let decision = DefaultPolicy.evaluate(&action, &ActionContext::restrictive());
         if decision.is_deny() {
-            return Err(ToolError::NotAuthorized(format!("policy DENY: {decision:?}")));
+            return Err(ToolError::NotAuthorized(format!(
+                "policy DENY: {decision:?}"
+            )));
         }
 
         let parsed: Args = if params.is_null() {
