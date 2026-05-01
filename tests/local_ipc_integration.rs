@@ -211,3 +211,29 @@ async fn test_cancel_routes_through_to_inject_stream() {
         Submission::Interrupt
     ));
 }
+
+#[tokio::test]
+async fn test_message_carries_client_id_metadata() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h6.sock");
+    let (_chan, _sse, mut stream) = spawn_channel_with_stream(path.clone()).await;
+    let client = UnixStream::connect(&path).await.unwrap();
+    let (client_r, mut client_w) = client.into_split();
+    let mut reader = BufReader::new(client_r);
+    let mut hello = String::new();
+    reader.read_line(&mut hello).await.unwrap();
+    client_w
+        .write_all(b"{\"type\":\"message\",\"content\":\"hi\"}\n")
+        .await
+        .unwrap();
+    let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(msg.content, "hi");
+    // metadata is serde_json::Value (not Option). Direct indexing.
+    let cid = msg.metadata["client_id"]
+        .as_str()
+        .expect("client_id string");
+    assert!(cid.starts_with("ipc-"), "got client_id={cid}");
+}
