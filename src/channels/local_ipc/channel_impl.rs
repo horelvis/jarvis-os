@@ -19,9 +19,6 @@ pub struct LocalIpcChannel {
     writer_buffer: usize,
     clients: ClientMap,
     shutdown: Arc<Notify>,
-    // mpsc::Sender that the reader tasks will use to inject messages
-    // into the agent loop. Materialized in `start()`.
-    inject_tx: Mutex<Option<mpsc::Sender<IncomingMessage>>>,
 }
 
 impl LocalIpcChannel {
@@ -38,7 +35,6 @@ impl LocalIpcChannel {
             writer_buffer,
             clients: Arc::new(Mutex::new(Default::default())),
             shutdown: Arc::new(Notify::new()),
-            inject_tx: Mutex::new(None),
         }
     }
 
@@ -74,10 +70,6 @@ impl Channel for LocalIpcChannel {
 
     async fn start(&self) -> Result<MessageStream, ChannelError> {
         let (tx, rx) = mpsc::channel::<IncomingMessage>(64);
-        {
-            let mut guard = self.inject_tx.lock().await;
-            *guard = Some(tx.clone());
-        }
         let cfg = ListenerConfig {
             user_id: self.user_id.clone(),
             sse: Arc::clone(&self.sse),
@@ -136,6 +128,10 @@ impl Channel for LocalIpcChannel {
         let event = Self::build_response_event(response);
         let map = self.clients.lock().await;
         for handle in map.values() {
+            // silent-ok: closed mpsc means the writer task already exited;
+            // the per-client log line landed in run_writer_task's debug!.
+            // Broadcasting to the rest of the map should not abort on one
+            // disconnected client.
             let _ = handle.tx.send(WireMessage::App(event.clone())).await;
         }
         Ok(())
