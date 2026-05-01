@@ -14,5 +14,5 @@ mod protocol;
 mod socket;
 
 // pub use channel_impl::LocalIpcChannel;  // populated by Task E2
-// pub use error::LocalIpcError;           // populated by Task A2
+pub use error::LocalIpcError;
 // pub use socket::resolve_socket_path;    // populated by Task C1
