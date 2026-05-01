@@ -1,6 +1,12 @@
 #![allow(dead_code)] // populated by Track C; production callers arrive in Track E
 
 use std::path::PathBuf;
+use std::time::Duration;
+
+use tokio::net::UnixStream;
+use tokio::time::timeout;
+
+use crate::channels::local_ipc::error::LocalIpcError;
 
 const ENV_OVERRIDE: &str = "IRONCLAW_LOCAL_SOCKET";
 const DISABLED_TOKEN: &str = "disabled";
@@ -138,12 +144,6 @@ mod tests {
     }
 }
 
-use std::time::Duration;
-use tokio::net::UnixStream;
-use tokio::time::timeout;
-
-use crate::channels::local_ipc::error::LocalIpcError;
-
 /// Inspect an existing socket file and remove it if no live IronClaw
 /// instance is listening. Returns `Ok(true)` if the orphan was cleaned
 /// (or never existed), `Ok(false)` if a live instance currently owns
@@ -162,6 +162,7 @@ pub async fn cleanup_orphan_socket(path: &std::path::Path) -> Result<bool, Local
                     path: path.to_path_buf(),
                     reason: e.to_string(),
                 })?;
+            tracing::debug!(path = %path.display(), "removed orphan socket");
             Ok(true)
         }
     }
