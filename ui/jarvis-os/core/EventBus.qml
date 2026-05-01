@@ -5,8 +5,8 @@ import Quickshell.Io
 QtObject {
     id: bus
 
-    // Connection state — driven by `bridge_online` / `bridge_offline`
-    // synthetic events from jarvis-ui-bridge.
+    // Connection state — driven by the `ipc_hello` handshake the
+    // IronClaw core sends once on connect over the local IPC socket.
     property bool connected: false
     property string lastError: ""
 
@@ -24,10 +24,11 @@ QtObject {
     signal responseEmitted(string threadId)
     signal eventLogged(var ev)
 
-    // Bridge socket. systemd-user puts XDG_RUNTIME_DIR=/run/user/<uid>;
+    // Bus socket. systemd-user puts XDG_RUNTIME_DIR=/run/user/<uid>;
     // for the loopback case the UID is the user's (typically 1000 on
-    // single-user Arch). The bridge service writes the socket here.
-    readonly property string socketPath: "/run/user/1000/jarvis-ui-bridge.sock"
+    // single-user Arch). The IronClaw core writes the socket here as
+    // part of its startup (src/channels/local_ipc/).
+    readonly property string socketPath: "/run/user/1000/ironclaw.sock"
 
     // Pipe NDJSON from the bridge socket via `socat`. The bridge writes
     // one JSON event per line; SplitParser slices on `\n`.
@@ -68,15 +69,14 @@ QtObject {
             return;
         }
 
-        // Bridge synthetic events update connection state.
-        if (ev.type === "bridge_online") {
+        // Local IPC handshake: ipc_hello fires once on connect.
+        if (ev.type === "ipc_hello") {
             bus.connected = true;
             bus.lastError = "";
             return;
         }
-        if (ev.type === "bridge_offline") {
-            bus.connected = false;
-            bus.lastError = "bridge offline";
+        if (ev.type === "error") {
+            console.warn("[EventBus] ipc error:", ev.kind, ev.detail);
             return;
         }
 
