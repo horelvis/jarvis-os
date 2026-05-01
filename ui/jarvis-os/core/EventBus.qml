@@ -30,8 +30,8 @@ QtObject {
     // part of its startup (src/channels/local_ipc/).
     readonly property string socketPath: "/run/user/1000/ironclaw.sock"
 
-    // Pipe NDJSON from the bridge socket via `socat`. The bridge writes
-    // one JSON event per line; SplitParser slices on `\n`.
+    // Pipe NDJSON from the IronClaw local_ipc socket via `socat`. The
+    // core writes one JSON event per line; SplitParser slices on `\n`.
     property var reader: Process {
         command: ["socat", "-u", "UNIX-CONNECT:" + bus.socketPath, "-"]
         running: true
