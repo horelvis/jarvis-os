@@ -98,9 +98,13 @@ pub fn start() -> Result<AudioIo> {
     input_stream.play().context("starting input stream")?;
 
     // ─── Output (speaker) ───
-    let output_device = host
-        .default_output_device()
-        .ok_or_else(|| anyhow!("no default audio output device"))?;
+    // Si cargamos el módulo echo-cancel, PipeWire crea sinks "passive"
+    // (`sink.jarvis-aec`, capture/playback internos) que no reproducen
+    // sonido — son sólo conductos para que el módulo procese audio.
+    // cpal puede acabar abriendo uno de esos como default y oír sale
+    // silencio absoluto. Filtramos esos por nombre y preferimos el
+    // primer sink real (alsa_output.* / bluez_output.*).
+    let output_device = pick_output_device(&host)?;
     let output_config = output_device
         .default_output_config()
         .context("getting default output config")?;
@@ -215,6 +219,33 @@ fn pick_input_device(host: &cpal::Host) -> Result<cpal::Device> {
     }
     host.default_input_device()
         .ok_or_else(|| anyhow!("no default audio input device"))
+}
+
+fn pick_output_device(host: &cpal::Host) -> Result<cpal::Device> {
+    use cpal::traits::HostTrait;
+    // Nombres de los nodos passive del módulo echo-cancel (ver
+    // arch/configs/pipewire/echo-cancel.conf). Hay que evitar abrir
+    // estos como output: no reproducen sonido audible.
+    const ECHO_CANCEL_PASSIVE: &[&str] = &["jarvis-aec", "capture.jarvis", "playback.jarvis"];
+    if let Ok(devs) = host.output_devices() {
+        for d in devs {
+            if let Ok(name) = d.name() {
+                let is_passive = ECHO_CANCEL_PASSIVE.iter().any(|p| name.contains(p));
+                if is_passive {
+                    tracing::debug!(device = %name, "audio.skipping_passive_sink");
+                    continue;
+                }
+                // Preferimos sinks "reales" (ALSA HW o BlueZ).
+                if name.starts_with("alsa_output") || name.starts_with("bluez_output") {
+                    tracing::info!(device = %name, "audio.using_output_device");
+                    return Ok(d);
+                }
+            }
+        }
+    }
+    // Fallback al default si no encontramos un sink alsa/bluez.
+    host.default_output_device()
+        .ok_or_else(|| anyhow!("no default audio output device"))
 }
 
 trait ToI16 {
