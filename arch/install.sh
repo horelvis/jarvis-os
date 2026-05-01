@@ -85,13 +85,12 @@ if [ ! -d "$HOME/dots-hyprland" ]; then
 fi
 
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
-log "Compilando ironclaw + jarvis_voice_daemon + jarvis_ui_bridge (release)..."
+log "Compilando ironclaw + jarvis_voice_daemon (release)..."
 log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
 cargo build --release --bin ironclaw
 cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
-cargo build --release -p jarvis_ui_bridge --bin jarvis-ui-bridge
 
-for bin in ironclaw jarvis-voice-daemon jarvis-ui-bridge; do
+for bin in ironclaw jarvis-voice-daemon; do
     src="$JARVIS_OS_DIR/target/release/$bin"
     if [ -f "$src" ]; then
         sudo install -Dm755 "$src" "/usr/local/bin/$bin"
@@ -127,17 +126,13 @@ log "  ui/jarvis-os/ copiado a /usr/share/jarvis-os/qml/"
 install -d "$HOME/.config/systemd/user"
 cp "$JARVIS_OS_DIR/arch/systemd-user/jarvis-ui.service" \
     "$HOME/.config/systemd/user/jarvis-ui.service"
-# jarvis-ui-bridge (systemd-user, mismo target).
-cp "$JARVIS_OS_DIR/arch/systemd-user/jarvis-ui-bridge.service" \
-    "$HOME/.config/systemd/user/jarvis-ui-bridge.service"
 sudo pacman -S --noconfirm --needed socat   # QML lee el socket via socat
 
 systemctl --user daemon-reload
 systemctl --user enable jarvis-ui.service
-systemctl --user enable jarvis-ui-bridge.service
-log "  jarvis-ui.service + jarvis-ui-bridge.service enabled"
-log "  (arrancan automáticamente al login Hyprland; o manual:"
-log "   systemctl --user start jarvis-ui-bridge jarvis-ui)"
+log "  jarvis-ui.service enabled"
+log "  (arranca automáticamente al login Hyprland; o manual:"
+log "   systemctl --user start jarvis-ui)"
 
 # ─── Step 7: Wallpaper jarvis-os ───
 log "Copiando wallpaper a ~/Pictures/jarvis-os/..."
