@@ -17,6 +17,7 @@ pub struct ChannelsConfig {
     pub cli: CliConfig,
     pub http: Option<HttpConfig>,
     pub gateway: Option<GatewayConfig>,
+    pub local_ipc: LocalIpcConfig,
     pub signal: Option<SignalConfig>,
     pub tui: Option<TuiChannelConfig>,
     /// Directory containing WASM channel modules (default: ~/.ironclaw/channels/).
@@ -100,6 +101,45 @@ pub struct GatewayOidcConfig {
     pub issuer: Option<String>,
     /// Expected `aud` claim. Validated if set.
     pub audience: Option<String>,
+}
+
+/// Local UNIX-socket IPC channel configuration.
+///
+/// Used by `src/channels/local_ipc/` to expose AppEvents and accept
+/// commands from co-located clients (voice daemon, Quickshell UI)
+/// without going through the gateway HTTP/WS surface. The socket path
+/// itself is resolved by `local_ipc::resolve_socket_path` from
+/// `IRONCLAW_LOCAL_SOCKET` (and falls back to a default under
+/// `$XDG_RUNTIME_DIR`); only the per-client writer buffer is configured
+/// here.
+#[derive(Debug, Clone)]
+pub struct LocalIpcConfig {
+    /// Per-client mpsc buffer for writer tasks. Defaults to 256.
+    ///
+    /// Override via `IRONCLAW_LOCAL_IPC_BUFFER`. Zero or unparseable
+    /// values fall back to the default rather than erroring — bind
+    /// failures and channel-disabled state are surfaced separately by
+    /// `local_ipc::create()`.
+    pub writer_buffer: usize,
+}
+
+impl Default for LocalIpcConfig {
+    fn default() -> Self {
+        Self { writer_buffer: 256 }
+    }
+}
+
+impl LocalIpcConfig {
+    /// Read the buffer override from the environment. Invalid or
+    /// non-positive values silently fall back to the default.
+    pub fn from_env() -> Self {
+        let writer_buffer = std::env::var("IRONCLAW_LOCAL_IPC_BUFFER")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(256);
+        Self { writer_buffer }
+    }
 }
 
 /// Signal channel configuration (signal-cli daemon HTTP/JSON-RPC).
@@ -415,6 +455,7 @@ impl ChannelsConfig {
             },
             http,
             gateway,
+            local_ipc: LocalIpcConfig::from_env(),
             signal,
             tui,
             wasm_channels_dir: {
@@ -623,6 +664,7 @@ mod tests {
             cli: CliConfig { enabled: true },
             http: None,
             gateway: None,
+            local_ipc: LocalIpcConfig::default(),
             signal: None,
             tui: None,
             wasm_channels_dir: PathBuf::from("/tmp/channels"),
@@ -649,6 +691,7 @@ mod tests {
             cli: CliConfig { enabled: false },
             http: None,
             gateway: None,
+            local_ipc: LocalIpcConfig::default(),
             signal: None,
             tui: None,
             wasm_channels_dir: PathBuf::from("/opt/channels"),

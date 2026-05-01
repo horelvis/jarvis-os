@@ -410,6 +410,7 @@ mod tests {
             cli: crate::config::CliConfig { enabled: false },
             http: None,
             gateway: None,
+            local_ipc: crate::config::LocalIpcConfig::default(),
             signal: None,
             tui: None,
             wasm_channels_dir: std::env::temp_dir().join("ironclaw-test-channels"),
