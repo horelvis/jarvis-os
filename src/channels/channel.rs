@@ -6,7 +6,10 @@ use std::pin::Pin;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::Stream;
-use ironclaw_common::{ExtensionName, ExternalThreadId, ExternalThreadIdError, JobResultStatus};
+use ironclaw_common::{
+    AppEvent, ExtensionName, ExternalThreadId, ExternalThreadIdError, JobResultStatus,
+    OnboardingStateDto, ToolDecisionDto,
+};
 use uuid::Uuid;
 
 use crate::error::ChannelError;
@@ -945,6 +948,226 @@ pub trait ChannelSecretUpdater: Send + Sync {
     ///
     /// The secret is optional (may be None if secret is no longer configured).
     async fn update_secret(&self, new_secret: Option<secrecy::SecretString>);
+}
+
+/// Translate a [`StatusUpdate`] into the corresponding wire [`AppEvent`].
+///
+/// Returns `None` for status variants that are intentionally NOT broadcast
+/// to clients (`RoutineUpdate`, `ContextPressure`, `SandboxStatus`,
+/// `SecretsStatus`, `CostGuard`, `ThreadList`, `EngineThreadList`,
+/// `ConversationHistory` — these surface elsewhere or are server-side-only).
+///
+/// Used by both [`crate::channels::web`] and `local_ipc` channels so the
+/// translation lives in exactly one place. Channel impls layer their own
+/// transport on top — web broadcasts via SseManager, local_ipc broadcasts
+/// via the same SseManager (its writer task is subscribed).
+pub fn status_update_to_app_event(
+    status: StatusUpdate,
+    thread_id: Option<String>,
+) -> Option<AppEvent> {
+    let event = match status {
+        StatusUpdate::Thinking(msg) => AppEvent::Thinking {
+            message: msg,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::ToolStarted {
+            name,
+            detail,
+            call_id,
+        } => AppEvent::ToolStarted {
+            name,
+            detail,
+            call_id,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::ToolCompleted {
+            name,
+            success,
+            error,
+            parameters,
+            call_id,
+            duration_ms,
+        } => AppEvent::ToolCompleted {
+            name,
+            success,
+            error,
+            parameters,
+            call_id,
+            duration_ms,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::ToolResult {
+            name,
+            preview,
+            call_id,
+        } => AppEvent::ToolResult {
+            name,
+            preview,
+            call_id,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::StreamChunk(content) => AppEvent::StreamChunk {
+            content,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::Status(msg) => AppEvent::Status {
+            message: msg,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::JobStarted {
+            job_id,
+            title,
+            browse_url,
+        } => AppEvent::JobStarted {
+            job_id,
+            title,
+            browse_url,
+        },
+        StatusUpdate::ApprovalNeeded {
+            request_id,
+            tool_name,
+            description,
+            parameters,
+            allow_always,
+        } => AppEvent::ApprovalNeeded {
+            request_id,
+            tool_name,
+            description,
+            parameters: serde_json::to_string_pretty(&parameters)
+                .unwrap_or_else(|_| parameters.to_string()),
+            thread_id,
+            allow_always,
+        },
+        StatusUpdate::AuthRequired {
+            extension_name,
+            instructions,
+            auth_url,
+            setup_url,
+            request_id,
+        } => AppEvent::OnboardingState {
+            extension_name,
+            state: OnboardingStateDto::AuthRequired,
+            request_id,
+            message: None,
+            instructions,
+            auth_url,
+            setup_url,
+            onboarding: None,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::AuthCompleted {
+            extension_name,
+            success,
+            message,
+        } => AppEvent::OnboardingState {
+            extension_name,
+            state: if success {
+                OnboardingStateDto::Ready
+            } else {
+                OnboardingStateDto::Failed
+            },
+            request_id: None,
+            message: Some(message),
+            instructions: None,
+            auth_url: None,
+            setup_url: None,
+            onboarding: None,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::ImageGenerated {
+            event_id,
+            data_url,
+            path,
+        } => AppEvent::ImageGenerated {
+            event_id,
+            data_url,
+            path,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::Suggestions { suggestions } => AppEvent::Suggestions {
+            suggestions,
+            thread_id: thread_id.clone(),
+        },
+        StatusUpdate::ReasoningUpdate {
+            narrative,
+            decisions,
+        } => AppEvent::ReasoningUpdate {
+            narrative,
+            decisions: decisions
+                .into_iter()
+                .map(|d| ToolDecisionDto {
+                    tool_name: d.tool_name,
+                    rationale: d.rationale,
+                })
+                .collect(),
+            thread_id,
+        },
+        StatusUpdate::TurnCost {
+            input_tokens,
+            output_tokens,
+            cost_usd,
+        } => AppEvent::TurnCost {
+            input_tokens,
+            output_tokens,
+            cost_usd,
+            thread_id,
+        },
+        StatusUpdate::ToolResultFull {
+            name,
+            output,
+            truncated,
+            call_id,
+        } => AppEvent::ToolResultFull {
+            name,
+            output,
+            truncated: if truncated { Some(true) } else { None },
+            call_id,
+            thread_id,
+        },
+        StatusUpdate::TurnMetrics {
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            model,
+            duration_ms,
+            iteration,
+        } => AppEvent::TurnMetrics {
+            thread_id,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            model,
+            duration_ms,
+            iteration,
+        },
+        StatusUpdate::JobStatus { job_id, status } => AppEvent::JobStatus {
+            job_id,
+            message: status,
+        },
+        StatusUpdate::JobResult { job_id, status } => AppEvent::JobResult {
+            job_id,
+            status,
+            session_id: None,
+            fallback_deliverable: None,
+        },
+        StatusUpdate::SkillActivated {
+            skill_names,
+            feedback,
+        } => AppEvent::SkillActivated {
+            skill_names,
+            thread_id,
+            feedback,
+        },
+        StatusUpdate::RoutineUpdate { .. }
+        | StatusUpdate::ContextPressure { .. }
+        | StatusUpdate::SandboxStatus { .. }
+        | StatusUpdate::SecretsStatus { .. }
+        | StatusUpdate::CostGuard { .. }
+        | StatusUpdate::ThreadList { .. }
+        | StatusUpdate::EngineThreadList { .. }
+        | StatusUpdate::ConversationHistory { .. } => return None,
+    };
+    Some(event)
 }
 
 #[cfg(test)]

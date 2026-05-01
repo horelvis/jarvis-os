@@ -108,12 +108,32 @@ impl Channel for LocalIpcChannel {
 
     async fn send_status(
         &self,
-        _status: StatusUpdate,
-        _metadata: &serde_json::Value,
+        status: StatusUpdate,
+        metadata: &serde_json::Value,
     ) -> Result<(), ChannelError> {
-        // Writers also subscribe to SseManager directly; status events
-        // routed through there reach the same client. respond() is the
-        // only "directed" path we honour explicitly. Default no-op.
+        // Translate StatusUpdate → AppEvent and broadcast via the SseManager
+        // shared with the agent loop. The writer task subscribed via
+        // subscribe_raw(Some(user_id), false) so the broadcast fans out to
+        // every connected local_ipc client whose user_id matches.
+        //
+        // This path is essential: when the LLM returns a suggestions-only
+        // response, the agent emits StatusUpdate::Suggestions through this
+        // method (thread_ops.rs:806) and there is no other broadcast path
+        // for it. A no-op here silently drops the suggestions and the user
+        // never sees follow-up commands.
+        let thread_id = metadata
+            .get("thread_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        if let Some(event) =
+            crate::channels::status_update_to_app_event(status, thread_id)
+        {
+            // Use self.user_id (the channel's owner) — the IncomingMessage
+            // metadata that the agent forwards typically carries client_id +
+            // thread_id but not user_id, and our writer's filter is keyed on
+            // self.user_id anyway.
+            self.sse.broadcast_for_user(&self.user_id, event);
+        }
         Ok(())
     }
 

@@ -51,6 +51,7 @@ pub use channel::{
     AttachmentKind, Channel, ChannelSecretUpdater, ChatApprovalPrompt, EngineThreadSummary,
     HistoryMessage, IncomingAttachment, IncomingMessage, MessageStream, OutgoingResponse,
     StatusUpdate, ThreadSummary, ToolDecision, routing_target_from_metadata,
+    status_update_to_app_event,
 };
 pub use http::{HttpChannel, HttpChannelState};
 pub use manager::ChannelManager;
