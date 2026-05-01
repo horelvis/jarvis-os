@@ -122,3 +122,92 @@ async fn test_scoped_event_for_other_user_filtered() {
     assert!(res.is_err(), "second read must time out (no extra event)");
     assert!(la.contains("heartbeat"));
 }
+
+use futures::StreamExt;
+use ironclaw::agent::submission::Submission;
+use ironclaw::channels::IncomingMessage;
+use uuid::Uuid;
+
+async fn spawn_channel_with_stream(
+    socket_path: std::path::PathBuf,
+) -> (
+    Arc<LocalIpcChannel>,
+    Arc<SseManager>,
+    std::pin::Pin<Box<dyn futures::Stream<Item = IncomingMessage> + Send>>,
+) {
+    let sse = Arc::new(SseManager::new());
+    let chan = Arc::new(LocalIpcChannel::new(
+        socket_path.clone(),
+        "owner".into(),
+        Arc::clone(&sse),
+        16,
+    ));
+    let stream = chan.start().await.expect("start");
+    wait_for_bind(&socket_path).await;
+    (chan, sse, stream)
+}
+
+#[tokio::test]
+async fn test_approval_routes_through_to_inject_stream() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h4.sock");
+    let (_chan, _sse, mut stream) = spawn_channel_with_stream(path.clone()).await;
+
+    let client = UnixStream::connect(&path).await.unwrap();
+    let (client_r, mut client_w) = client.into_split();
+    let mut reader = BufReader::new(client_r);
+    let mut hello = String::new();
+    reader.read_line(&mut hello).await.unwrap();
+
+    let req_id = Uuid::new_v4();
+    let payload =
+        format!("{{\"type\":\"approval\",\"request_id\":\"{req_id}\",\"action\":\"approve\"}}\n");
+    client_w.write_all(payload.as_bytes()).await.unwrap();
+
+    let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("stream timeout")
+        .expect("stream ended");
+    assert_eq!(msg.channel, "local_ipc");
+    // Sideband path: Submission is on structured_submission, NOT in
+    // content (content stays empty for control commands).
+    assert_eq!(msg.content, "");
+    match msg.structured_submission.expect("sideband set") {
+        Submission::ExecApproval {
+            request_id,
+            approved,
+            ..
+        } => {
+            assert_eq!(request_id, req_id);
+            assert!(approved);
+        }
+        other => panic!("expected ExecApproval, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_cancel_routes_through_to_inject_stream() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h5.sock");
+    let (_chan, _sse, mut stream) = spawn_channel_with_stream(path.clone()).await;
+
+    let client = UnixStream::connect(&path).await.unwrap();
+    let (client_r, mut client_w) = client.into_split();
+    let mut reader = BufReader::new(client_r);
+    let mut hello = String::new();
+    reader.read_line(&mut hello).await.unwrap();
+
+    client_w
+        .write_all(b"{\"type\":\"cancel\"}\n")
+        .await
+        .unwrap();
+
+    let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("stream timeout")
+        .expect("stream ended");
+    assert!(matches!(
+        msg.structured_submission.expect("sideband set"),
+        Submission::Interrupt
+    ));
+}
