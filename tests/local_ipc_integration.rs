@@ -237,3 +237,95 @@ async fn test_message_carries_client_id_metadata() {
         .expect("client_id string");
     assert!(cid.starts_with("ipc-"), "got client_id={cid}");
 }
+
+#[tokio::test]
+async fn test_client_disconnect_releases_resources() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h7.sock");
+    let (_chan, _sse) = spawn_channel(path.clone()).await;
+    {
+        let client = UnixStream::connect(&path).await.unwrap();
+        let mut reader = BufReader::new(client);
+        let mut h = String::new();
+        reader.read_line(&mut h).await.unwrap();
+        // Drop reader → underlying stream closes → server reader sees EOF.
+    }
+    // Give the reader task a moment to wind down, then assert we can
+    // still connect a new client successfully (no panic surfaced — test
+    // would have aborted).
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let client2 = UnixStream::connect(&path).await.unwrap();
+    let mut reader = BufReader::new(client2);
+    let mut h2 = String::new();
+    tokio::time::timeout(Duration::from_secs(2), reader.read_line(&mut h2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(h2.contains("ipc_hello"));
+}
+
+#[tokio::test]
+async fn test_socket_file_cleanup_on_shutdown() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h8.sock");
+    let sse = Arc::new(SseManager::new());
+    let chan = LocalIpcChannel::new(path.clone(), "owner".into(), sse, 16);
+    let _ = chan.start().await.unwrap();
+    wait_for_bind(&path).await;
+    assert!(path.exists());
+    chan.shutdown().await.unwrap();
+    // Listener consumes the shutdown notification and removes the file.
+    for _ in 0..50 {
+        if !path.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(40)).await;
+    }
+    assert!(!path.exists(), "socket file must be removed on shutdown");
+}
+
+#[tokio::test]
+async fn test_malformed_line_does_not_kill_session() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h9.sock");
+    let (_chan, _sse, mut stream) = spawn_channel_with_stream(path.clone()).await;
+    let client = UnixStream::connect(&path).await.unwrap();
+    let (client_r, mut client_w) = client.into_split();
+    let mut reader = BufReader::new(client_r);
+    let mut h = String::new();
+    reader.read_line(&mut h).await.unwrap();
+    // Send garbage, then a valid command.
+    client_w.write_all(b"this is not json\n").await.unwrap();
+    client_w
+        .write_all(b"{\"type\":\"message\",\"content\":\"after-garbage\"}\n")
+        .await
+        .unwrap();
+    let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("stream timeout")
+        .expect("stream ended");
+    assert_eq!(msg.content, "after-garbage");
+}
+
+#[tokio::test]
+async fn test_reconnect_after_client_drop_yields_fresh_hello() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h10.sock");
+    let (_chan, _sse) = spawn_channel(path.clone()).await;
+    {
+        let c1 = UnixStream::connect(&path).await.unwrap();
+        let mut r1 = BufReader::new(c1);
+        let mut h = String::new();
+        r1.read_line(&mut h).await.unwrap();
+        assert!(h.contains("ipc_hello"));
+    }
+    // New connection — fresh hello.
+    let c2 = UnixStream::connect(&path).await.unwrap();
+    let mut r2 = BufReader::new(c2);
+    let mut h = String::new();
+    tokio::time::timeout(Duration::from_secs(2), r2.read_line(&mut h))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(h.contains("ipc_hello"));
+}
