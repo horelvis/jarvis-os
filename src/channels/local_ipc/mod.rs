@@ -15,4 +15,5 @@ mod socket;
 
 // pub use channel_impl::LocalIpcChannel;  // populated by Task E2
 pub use error::LocalIpcError;
-// pub use socket::resolve_socket_path;    // populated by Task C1
+pub use socket::SocketResolution;
+pub use socket::resolve_socket_path;
