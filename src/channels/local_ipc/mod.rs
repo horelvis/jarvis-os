@@ -13,7 +13,7 @@ mod error;
 mod protocol;
 mod socket;
 
-// pub use channel_impl::LocalIpcChannel;  // populated by Task E2
+pub use channel_impl::LocalIpcChannel;
 pub use error::LocalIpcError;
 pub use socket::SocketResolution;
 pub use socket::resolve_socket_path;
