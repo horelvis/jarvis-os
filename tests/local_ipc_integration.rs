@@ -329,3 +329,27 @@ async fn test_reconnect_after_client_drop_yields_fresh_hello() {
         .unwrap();
     assert!(h.contains("ipc_hello"));
 }
+
+#[tokio::test]
+async fn test_slow_client_does_not_block_others() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("h11.sock");
+    let (_chan, sse) = spawn_channel(path.clone()).await;
+    // Client A: never reads (slow). Client B: reads normally.
+    let _slow = UnixStream::connect(&path).await.unwrap();
+    let mut fast = BufReader::new(UnixStream::connect(&path).await.unwrap());
+    drain_hello(&mut fast).await;
+
+    // Push enough events to overflow the slow client's mpsc (cap 16
+    // per spawn_channel) but well within the SseManager broadcast
+    // buffer.
+    for _ in 0..32 {
+        sse.broadcast(AppEvent::Heartbeat);
+    }
+    // The fast client must still receive at least one event despite
+    // the slow client falling behind.
+    let mut line = String::new();
+    let got = tokio::time::timeout(Duration::from_secs(2), fast.read_line(&mut line)).await;
+    assert!(got.is_ok(), "fast client starved by slow client");
+    assert!(line.contains("heartbeat"));
+}
