@@ -94,3 +94,37 @@ mod tests {
         assert!(res.is_err());
     }
 }
+
+/// Wire-stable error kinds emitted to the client as a synthetic `error`
+/// transport event. Snake_case on the wire (rule: types.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IpcErrorKind {
+    CommandInvalid,
+    CommandTooLarge,
+    RateLimit,
+    InternalError,
+}
+
+#[cfg(test)]
+mod kind_tests {
+    use super::IpcErrorKind;
+
+    #[test]
+    fn kind_serializes_snake_case() {
+        let s = serde_json::to_string(&IpcErrorKind::CommandInvalid).unwrap();
+        assert_eq!(s, "\"command_invalid\"");
+        let s = serde_json::to_string(&IpcErrorKind::CommandTooLarge).unwrap();
+        assert_eq!(s, "\"command_too_large\"");
+        let s = serde_json::to_string(&IpcErrorKind::RateLimit).unwrap();
+        assert_eq!(s, "\"rate_limit\"");
+        let s = serde_json::to_string(&IpcErrorKind::InternalError).unwrap();
+        assert_eq!(s, "\"internal_error\"");
+    }
+
+    #[test]
+    fn kind_deserializes_snake_case() {
+        let k: IpcErrorKind = serde_json::from_str("\"command_invalid\"").unwrap();
+        assert_eq!(k, IpcErrorKind::CommandInvalid);
+    }
+}
