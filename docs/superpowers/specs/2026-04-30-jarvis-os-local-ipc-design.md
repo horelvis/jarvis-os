@@ -398,6 +398,11 @@ Fuera de scope para v1. Se cubren con los integration tests Rust.
 - **Convai como agente principal de IronClaw** (interpretación α/β/γ): si en el futuro Convai pasa a ser el agente principal, este IPC sigue siendo válido — lo que cambia es el conjunto de comandos que los clientes envían, no el transporte. NDJSON + comandos discretos toleran el cambio sin rediseño.
 - **Soporte de comandos extendidos** (`AuthSubmit`, control UI bidireccional): v2 si surgen consumidores concretos.
 - **Suscripciones filtradas por tipo de evento**: hoy el cliente recibe todo y filtra él. Si en v2 hay clientes de bajo recurso que necesitan filtrar server-side, se añade un comando `subscribe { event_types: [...] }`.
+- **Implementación real, post-spec (2026-05-01):** durante la fase de plan se descubrieron cuatro divergencias respecto al spec original. Todas se resolvieron en `docs/superpowers/plans/2026-05-01-jarvis-os-local-ipc.md` y se cristalizan así:
+  1. Los tipos `GateManager` y `CancelHandle` mencionados en §4.2 NO existen en el repo. Approval/Cancel usan el sideband tipado `IncomingMessage::with_structured_submission(Submission)` (no JSON-en-content como hace el web channel legacy), inyectado por el mismo `MessageStream` que `Channel::start()` devuelve.
+  2. El SseManager NO se hoistea antes del bloque del gateway. `GatewayChannel::new()` construye uno propio internamente sin permitir inyección, y el agent loop's `sse_tx` se alimenta de ése. Por tanto el bloque local_ipc se inserta DESPUÉS del gateway, reusando `gw.state().sse`; cuando el gateway está apagado, materializa uno propio y lo asigna a `sse_manager` para que el agent loop tenga bus.
+  3. `AppEvent::Response.thread_id` es `String` (no `Option`); `OutgoingResponse.thread_id` es `Option<ExternalThreadId>`. La conversión es explícita en `build_response_event` (`.map(|t| t.as_str().to_string()).unwrap_or_default()`).
+  4. Los eventos sintéticos `ipc_hello` + `error` (transport-only) viajan por el mismo writer mpsc que los `AppEvent` mediante un envelope `WireMessage = App(AppEvent) | Transport(TransportEvent)`. Esto permite que los `error` events del §5.1 efectivamente lleguen al cliente cuando una línea es malformada, en vez de solo loggearlos.
 
 ## 15. Referencias
 
