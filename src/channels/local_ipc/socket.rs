@@ -291,18 +291,22 @@ pub async fn run_listener(
                         let buf = cfg.writer_buffer;
                         let cid_for_remove = client_id.clone();
                         tokio::spawn(async move {
-                            let handle = spawn_session(
-                                stream, client_id, user, sse, inject, buf,
-                            )
-                            .await;
+                            let handle =
+                                spawn_session(stream, client_id, user, sse, inject, buf).await;
                             register(&clients, handle).await;
-                            // No await for completion — both tasks live
-                            // independently; the registry entry will be
-                            // removed when respond() finds it gone (via
-                            // a periodic sweep in v2). For v1 the entry
-                            // leaks until shutdown, which is bounded by
-                            // HARD_CLIENT_CAP. v2 follow-up: track per-
-                            // session JoinHandle and unregister on exit.
+                            // KNOWN-LIMITATION (v2 follow-up): spawn_session
+                            // returns immediately — the reader/writer subtasks
+                            // live independently. We have no JoinHandle to
+                            // await, so we decrement `active` here even though
+                            // the session is still open. Net effect for v1:
+                            // SOFT_CLIENT_CAP / HARD_CLIENT_CAP only enforce
+                            // simultaneous-registration, NOT simultaneous-
+                            // sessions. Real cap relies on POSIX file perms
+                            // + the practical client count (voice daemon +
+                            // Quickshell + ad-hoc tools, ≤ 5 in practice).
+                            // The ClientMap entry also leaks until listener
+                            // shutdown for the same reason. v2 will tie both
+                            // to a real session-end signal via JoinHandle.
                             let _ = cid_for_remove;
                             active_for_session.fetch_sub(1, Ordering::Relaxed);
                         });
@@ -419,6 +423,7 @@ mod listener_tests {
             }
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
+        assert!(path.exists(), "socket file not created within 1s");
         let meta = std::fs::metadata(&path).unwrap();
         let mode = meta.permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "socket must be chmod 0600 (got {mode:o})");

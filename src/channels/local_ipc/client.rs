@@ -72,9 +72,14 @@ pub async fn spawn_session(
             writer_tx_for_reader,
         )
         .await;
-        // When the reader exits (client closed the socket), our extra
-        // sender drops along with this future and the writer task
-        // observes channel close (if it was the last sender) and ends.
+        // When the reader exits (client closed the socket), the
+        // `writer_tx_for_reader` clone drops. The writer mpsc only
+        // closes when ALL senders drop — `event_tx` (held in the
+        // returned `ClientHandle.tx`, registered in `ClientMap`) is
+        // the longest-lived one. So the writer task lifetime is bound
+        // to the `ClientHandle` entry, not to the reader exit. Until
+        // Track E (or v2) implements unregister on session-end the
+        // writer outlives the client connection until listener shutdown.
     });
 
     ClientHandle {
@@ -212,11 +217,11 @@ async fn run_writer_task(
             sse_event = async {
                 match sse_stream.as_mut() {
                     Some(s) => s.next().await,
-                    None => {
-                        // Park forever — fall through to event_rx only.
-                        std::future::pending::<()>().await;
-                        None
-                    }
+                    // Park forever so the select! falls through to event_rx
+                    // only. Using pending<Option<AppEvent>> directly (not
+                    // pending<()> + dead `None`) avoids the unreachable-code
+                    // smell.
+                    None => std::future::pending::<Option<AppEvent>>().await,
                 }
             } => sse_event.map(WireMessage::App),
             else => None,
@@ -376,6 +381,10 @@ mod tests {
         .unwrap();
         assert!(err_line.contains("\"type\":\"error\""));
         assert!(err_line.contains("\"kind\":\"command_invalid\""));
+        assert!(
+            err_line.contains("\"detail\":\""),
+            "transport error must include non-empty detail: {err_line}"
+        );
     }
 
     #[tokio::test]
