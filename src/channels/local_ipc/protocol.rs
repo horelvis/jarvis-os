@@ -128,3 +128,99 @@ mod kind_tests {
         assert_eq!(k, IpcErrorKind::CommandInvalid);
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalAction {
+    Approve,
+    Deny,
+}
+
+/// Commands the client may send to the server. Wire-stable.
+///
+/// `thread_id` and `step_id` are kept as `String` here (not the engine's
+/// `ThreadId` newtype) because the wire payload is untrusted and the
+/// engine-facing constructors will validate at the call site.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ClientCommand {
+    Message {
+        content: String,
+        #[serde(default)]
+        thread_id: Option<String>,
+    },
+    Approval {
+        request_id: String,
+        action: ApprovalAction,
+    },
+    Cancel {
+        #[serde(default)]
+        step_id: Option<String>,
+    },
+    Ping,
+}
+
+#[cfg(test)]
+mod command_tests {
+    use super::*;
+
+    #[test]
+    fn message_roundtrip() {
+        let raw = r#"{"type":"message","content":"hola","thread_id":"t1"}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            cmd,
+            ClientCommand::Message {
+                content: "hola".into(),
+                thread_id: Some("t1".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn message_thread_id_optional() {
+        let raw = r#"{"type":"message","content":"hi"}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            cmd,
+            ClientCommand::Message {
+                content: "hi".into(),
+                thread_id: None,
+            }
+        );
+    }
+
+    #[test]
+    fn approval_roundtrip() {
+        let raw = r#"{"type":"approval","request_id":"r1","action":"approve"}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            cmd,
+            ClientCommand::Approval {
+                request_id: "r1".into(),
+                action: ApprovalAction::Approve,
+            }
+        );
+    }
+
+    #[test]
+    fn cancel_roundtrip() {
+        let raw = r#"{"type":"cancel"}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(cmd, ClientCommand::Cancel { step_id: None });
+    }
+
+    #[test]
+    fn ping_roundtrip() {
+        let raw = r#"{"type":"ping"}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(cmd, ClientCommand::Ping);
+    }
+
+    #[test]
+    fn unknown_type_rejected() {
+        let raw = r#"{"type":"frobnicate"}"#;
+        let res: Result<ClientCommand, _> = serde_json::from_str(raw);
+        assert!(res.is_err());
+    }
+}
