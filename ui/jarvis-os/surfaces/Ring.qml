@@ -7,16 +7,19 @@ import "../core"
 PanelWindow {
     id: ring
 
-    anchors { bottom: true; right: true }
-    margins { right: 32; bottom: 32 }
-
-    implicitWidth: 140
-    implicitHeight: 156  // extra room for status label below the orb
+    // Span the full screen so the orb can sit at exact screen center.
+    // The panel surface is transparent and pointer events pass through
+    // (`mask: Region {}` below), so the rest of the desktop is unaffected.
+    anchors { top: true; bottom: true; left: true; right: true }
 
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: 0
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    // Empty mask region → all pointer events fall through to whatever is
+    // beneath. Without this, the fullscreen layer would swallow every click.
+    mask: Region {}
 
     readonly property bool agentActive: Object.keys(EventBus.activeTools).length > 0
     readonly property bool offline: !EventBus.connected
@@ -27,8 +30,7 @@ PanelWindow {
 
     Item {
         id: orb
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.centerIn: parent
         width: 140
         height: 140
 
@@ -241,11 +243,12 @@ PanelWindow {
         }
     }
 
-    // Status label below the orb.
+    // Status label directly below the orb (not at screen bottom now that
+    // the panel spans the full display).
     Text {
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 2
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: orb.bottom
+        anchors.topMargin: 4
+        anchors.horizontalCenter: orb.horizontalCenter
         color: ring.colorPrimary
         font.family: "monospace"
         font.pixelSize: 9
