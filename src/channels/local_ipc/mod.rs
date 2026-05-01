@@ -71,7 +71,13 @@ mod tests {
     /// unlikely; this is documented should it bite later.)
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    // The lock IS held across .await — that's intentional: another test
+    // in this module mutating IRONCLAW_LOCAL_SOCKET concurrently would
+    // race with create()'s env read. #[tokio::test] uses a current-thread
+    // runtime, so the sync Mutex cannot deadlock on this future. The
+    // alternative (drop lock before await) reintroduces the race.
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn create_returns_none_when_disabled() {
         let _guard = ENV_LOCK.lock().unwrap();
         let prev = std::env::var("IRONCLAW_LOCAL_SOCKET").ok();
