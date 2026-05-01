@@ -1038,6 +1038,46 @@ async fn async_main() -> anyhow::Result<()> {
         channels.add(Box::new(gw)).await;
     }
 
+    // ── Local UNIX-socket IPC channel (replaces jarvis_ui_bridge) ──────
+    //
+    // Reuses the gateway's SseManager when present; otherwise materializes
+    // its own and assigns it to `sse_manager` so the agent loop's
+    // `sse_tx` (set further down at the AgentDeps init) sees the same Arc
+    // and feeds it. Without that assignment, local_ipc subscribers would
+    // never receive AppEvents in CLI-only mode.
+    if enable_non_cli {
+        let sse_for_local = match sse_manager.as_ref() {
+            Some(existing) => Arc::clone(existing),
+            None => {
+                let fresh = Arc::new(ironclaw::channels::web::sse::SseManager::new());
+                sse_manager = Some(Arc::clone(&fresh));
+                fresh
+            }
+        };
+        match ironclaw::channels::local_ipc::create(
+            config.owner_id.clone(),
+            sse_for_local,
+            config.channels.local_ipc.writer_buffer,
+        )
+        .await
+        {
+            Ok(Some(channel)) => {
+                channel_names.push("local_ipc".to_string());
+                channels.add(Box::new(channel)).await;
+                tracing::debug!(
+                    "local_ipc channel enabled (writer_buffer={})",
+                    config.channels.local_ipc.writer_buffer
+                );
+            }
+            Ok(None) => {
+                tracing::debug!("local_ipc channel disabled by env");
+            }
+            Err(e) => {
+                tracing::warn!("local_ipc channel failed to initialize: {e}");
+            }
+        }
+    }
+
     // ── Boot screen ────────────────────────────────────────────────────
 
     let boot_tool_count = components.tools.count();
