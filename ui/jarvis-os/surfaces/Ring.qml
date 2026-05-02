@@ -155,7 +155,7 @@ PanelWindow {
                 //   ANILLO 2  Clock-hand field (60 uniform ticks, rotates CW)
                 //   ANILLO 3  Two-layer ring (A3A 280° arc + A3B circle)
                 //   ANILLO 4  Clock-hand field — mirrors A2 (60 ticks, rotates CCW)
-                //   ANILLO 5  Outermost frame ring (thick uniform)
+                //   ANILLO 5  Two-layer frame ring — inverse of A3
                 //   [deco a]  Status dots — DISABLED (commented out)
                 //   [deco b]  Progress accent — DISABLED (commented out)
                 //
@@ -198,14 +198,25 @@ PanelWindow {
                 //   • Inner edge at outerR - 9 ≈ 104.
                 ticks(outerR + 11, 60, 20, 1, ring.colorPrimary, 0.85, -orb.spin, 0);
 
-                // ANILLO 5 — outermost frame ring.
-                //   • Width 18 px. Center at outerR + 34.5 so the
-                //     inner edge sits at outerR + 25.5 (well clear of
-                //     A4 ticks at outerR + 11).
-                //   • Alpha 0.55 — perceptual match to ANILLO 2 on a
-                //     thick stroke + glow.
-                //   • shadowBlur=12. Static.
-                glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
+                // ANILLO 5 — two-layer frame ring (A5A + A5B), inverse of A3.
+                //   A5A — wide base, 280° arc with gap at 12 o'clock
+                //         (inverse of A3A whose gap is at 6 o'clock).
+                //         Sweep 40°..320° leaves an 80° gap on top.
+                //         Center outerR + 34.5, width 18 → inner edge
+                //         outerR + 25.5, outer edge outerR + 43.5.
+                //   A5B — bright hairline, full circle. EXTERIOR edges
+                //         align (inverse of A3 which has interior
+                //         edges aligned). Center outerR + 42.75,
+                //         width 1.5 → outer edge outerR + 43.5
+                //         (matches A5A's outer edge).
+                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A5A.
+                var a5R = outerR + 34.5;
+                ctx.save();
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = ring.colorPrimary;
+                arc(a5R, 40, 320, 18, ring.colorPrimary, 0.85);   // A5A — gap up
+                ctx.restore();
+                circle(a5R + 8.25, 1.5, ring.colorPrimary, 0.85); // A5B — exterior aligned
 
                 // ─── ANILLO 3: two-layer ring (A3A + A3B) ─────────────
                 //   A3A — wide base, 280° arc with gap at 6 o'clock.
