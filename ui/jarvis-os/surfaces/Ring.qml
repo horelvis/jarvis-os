@@ -152,11 +152,10 @@ PanelWindow {
                 //
                 //   [bg]      Soft radial center glow (cyan halo)
                 //   ANILLO 1  Five overlapping audio bands (FFT bands)
-                //   ANILLO 2  Two-layer ring (A2A 220° arc + A2B circle)
-                //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
-                //   ANILLO 4  Two-layer ring (A4A 220° arc + A4B circle)
-                //   ANILLO 5  Clock-hand field — mirrors A3 (60 ticks, rotates)
-                //   ANILLO 6  Outermost frame ring (thick uniform)
+                //   ANILLO 2  Clock-hand field (60 uniform ticks, rotates CW)
+                //   ANILLO 3  Two-layer ring (A3A 280° arc + A3B circle)
+                //   ANILLO 4  Clock-hand field — mirrors A2 (60 ticks, rotates CCW)
+                //   ANILLO 5  Outermost frame ring (thick uniform)
                 //   [deco a]  Status dots — DISABLED (commented out)
                 //   [deco b]  Progress accent — DISABLED (commented out)
                 //
@@ -187,20 +186,19 @@ PanelWindow {
                 ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── ANILLO 5 + 6: outer stack ────────────────────────
+                // ─── ANILLO 4 + 5: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — clock-hand field, counter-rotating mirror
-                // of ANILLO 3. Same 60 ticks / line 1 / colorPrimary /
-                // α=0.85, but length 20 (4× A3) and `-orb.spin` so it
-                // rotates in the opposite direction. The two tick
-                // fields read as a coupled pair: A3 inside spinning CW,
-                // A5 outside spinning CCW.
+                // ANILLO 4 — clock-hand field, counter-rotating mirror
+                // of ANILLO 2. Same 60 ticks / line 1 / colorPrimary /
+                // α=0.85, length 20 (4× A2) and `-orb.spin` so it
+                // rotates CCW. The two tick fields A2 (CW) + A4 (CCW)
+                // read as a coupled counter-rotating pair.
                 //   • Outer edge at outerR + 11 ≈ 124.
                 //   • Inner edge at outerR - 9 ≈ 104.
                 ticks(outerR + 11, 60, 20, 1, ring.colorPrimary, 0.85, -orb.spin, 0);
 
-                // ANILLO 6 — outermost frame ring.
+                // ANILLO 5 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
                 //     inner edge sits at outerR + 25.5 (well clear of
                 //     A4 ticks at outerR + 11).
@@ -209,25 +207,21 @@ PanelWindow {
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
-                // ─── ANILLO 4: two-layer ring (A4A + A4B), opposite of A2.
-                //   A4A — wide base, **280° arc** with gap at 6 o'clock
-                //         (the inverse of A2A, whose gap is at 12).
-                //         Sweep 220°..500° (wraps past 0°) covers the
-                //         top arc, leaving an 80° gap at the bottom.
-                //         Center midR, width 16 → inner edge midR-8,
-                //         outer edge midR+8.
-                //   A4B — bright hairline, full circle. Interior edges
-                //         align (matches A2 after both were inverted).
-                //         Center midR-7.25, width 1.5 → inner edge
-                //         midR-8.
-                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A4A.
-                var a4R = midR;
+                // ─── ANILLO 3: two-layer ring (A3A + A3B) ─────────────
+                //   A3A — wide base, 280° arc with gap at 6 o'clock.
+                //         Sweep 220°..500° (wraps past 0°). Center
+                //         midR, width 16 → inner midR-8, outer midR+8.
+                //   A3B — bright hairline, full circle. Interior edges
+                //         align with A3A. Center midR-7.25, width 1.5
+                //         → inner edge midR-8.
+                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A3A.
+                var a3R = midR;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(a4R, 220, 500, 16, ring.colorPrimary, 0.85);   // A4A
+                arc(a3R, 220, 500, 16, ring.colorPrimary, 0.85);   // A3A
                 ctx.restore();
-                circle(a4R - 7.25, 1.5, ring.colorPrimary, 0.85);  // A4B
+                circle(a3R - 7.25, 1.5, ring.colorPrimary, 0.85);  // A3B
 
                 // ─── [deco a + deco b] DISABLED ───────────────────────
                 // User: "no logro identificarlos" — the status dots and
@@ -264,36 +258,17 @@ PanelWindow {
                 //     ctx.restore();
                 // }
 
-                // ─── ANILLO 3: clock-hand field (restored) ────────────
+                // ─── ANILLO 2: inner clock-hand field ─────────────────
                 // 60 uniform ticks at radius 65, length 5, line 1 px,
-                // rotating with orb.spin. Was lost when the original
-                // ANILLO 2 (clock-hand at innerR+18) was rebuilt as a
-                // two-layer ring; restored here at radius 65 so it sits
-                // in the empty band between the new A2 (radius 44) and
-                // the middle ring stack (midR ≈ 89).
+                // rotating CW with orb.spin. Forms a coupled CW/CCW
+                // pair with ANILLO 4 (the outer clock-hand field).
                 ticks(65, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
-                // ─── ANILLO 2: two-layer ring (A2A + A2B) ─────────────
-                // Two strokes sharing color and alpha; widths differ
-                // so their *interior edges align* — matches A4's
-                // alignment after the user inverted both rings.
-                //
-                //   A2A — wide base, 220° arc only.
-                //         Center a2R, width 8 → inner edge a2R - 4.
-                //         Gap centered at 12 o'clock (70°..290°).
-                //   A2B — hairline, full circle.
-                //         Center a2R - 3.25, width 1.5 → inner edge
-                //         a2R - 4 (matches A2A's inner edge).
-                //
-                // Both at colorPrimary, α=0.85. shadowBlur=8 on A2A
-                // only.
-                var a2R = (innerR + 18) / 2;
-                ctx.save();
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = ring.colorPrimary;
-                arc(a2R, 70, 290, 8, ring.colorPrimary, 0.85);   // A2A
-                ctx.restore();
-                circle(a2R - 3.25, 1.5, ring.colorPrimary, 0.85); // A2B
+                // (Original ANILLO 2 — interior two-layer ring at radius
+                // 44 — was removed at user request to give the audio
+                // bands more room: "apenas se ven". Its slot was the
+                // band 36..48; the audio bands now expand into that
+                // region with a higher bandRBase below.)
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
@@ -301,6 +276,11 @@ PanelWindow {
                 // now have the inner ground entirely to themselves.)
 
                 // ─── ANILLO 1: five overlapping audio bands ───────────
+                // bandRBase pushed up to 50 (was ~28) after A2 was
+                // removed, since the user reported the bands "apenas se
+                // ven". With bandRBase=50 and ampMul up to 6, the
+                // bands oscillate in the radius range 44..56 — well
+                // within the slot the deleted A2 used to occupy.
                 // The innermost layer. Five closed undulating curves
                 // at the SAME radius (no staircase): each band is
                 //   r(θ,t) = bandRBase + ampMul · audioAmp · sin(n·θ + ω·t)
@@ -310,7 +290,7 @@ PanelWindow {
                 // high-mid / treble. F3a uses synthetic phases; F3b
                 // will swap them for the voice daemon's per-band level
                 // data so the bands react to actual audio.
-                var bandRBase = (coreR + 8) / 2;
+                var bandRBase = 50;
                 var bandConfigs = [
                     { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },
                     { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7 },
