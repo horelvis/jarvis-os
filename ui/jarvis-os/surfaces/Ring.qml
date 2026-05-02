@@ -289,11 +289,10 @@ PanelWindow {
                 // now have the inner ground entirely to themselves.)
 
                 // ─── ANILLO 1: five overlapping audio bands ───────────
-                // bandRBase pushed up to 50 (was ~28) after A2 was
-                // removed, since the user reported the bands "apenas se
-                // ven". With bandRBase=50 and ampMul up to 6, the
-                // bands oscillate in the radius range 44..56 — well
-                // within the slot the deleted A2 used to occupy.
+                // bandRBase pulled back to 30 after the user reduced
+                // the band radius again ("reducir radio de A1"); line
+                // width bumped 1.2 → 2.5 ("añadir más grosor") so the
+                // strokes are visible on the smaller circumference.
                 // The innermost layer. Five closed undulating curves
                 // at the SAME radius (no staircase): each band is
                 //   r(θ,t) = bandRBase + ampMul · audioAmp · sin(n·θ + ω·t)
@@ -303,7 +302,7 @@ PanelWindow {
                 // high-mid / treble. F3a uses synthetic phases; F3b
                 // will swap them for the voice daemon's per-band level
                 // data so the bands react to actual audio.
-                var bandRBase = 50;
+                var bandRBase = 30;
                 var bandConfigs = [
                     { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },
                     { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7 },
@@ -318,7 +317,7 @@ PanelWindow {
                     ctx.save();
                     ctx.beginPath();
                     ctx.strokeStyle = cfg.color;
-                    ctx.lineWidth = 1.2;
+                    ctx.lineWidth = 2.5;
                     ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.6 : 0.7) * amp;
                     var first = true;
                     for (var bdeg = 0; bdeg <= 360; bdeg += 1) {
