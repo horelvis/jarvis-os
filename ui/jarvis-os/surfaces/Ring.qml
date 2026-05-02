@@ -160,11 +160,11 @@ PanelWindow {
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
                 ticks(outerR + 18, 64, 14, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ─── Outermost ring: uniform thickness, hugs the ticks
-                // Sits at the outer edge of the 64-tick field
-                // (outerR + 18) so it visually closes the radial
-                // marks. Fixed stroke, soft glow.
-                glowCircle(outerR + 18, 3, ring.colorPrimary, 0.92, 12);
+                // ─── Outermost ring: uniform thickness, separated from ticks
+                // The 64 ticks end at outerR + 18; this ring sits at
+                // outerR + 30 so there's a visible breathing gap
+                // between the radial tick marks and the closing ring.
+                glowCircle(outerR + 30, 3, ring.colorPrimary, 0.92, 12);
 
                 // ─── Middle ring ─────────────────────────────────────
                 segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
