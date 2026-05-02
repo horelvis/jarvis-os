@@ -221,14 +221,14 @@ use tracing::{debug, warn};
 use crate::channels::IncomingMessage;
 use crate::channels::local_ipc::client::{ClientHandle, ClientMap, spawn_session};
 use crate::channels::local_ipc::protocol::ClientId;
-use crate::channels::web::platform::sse::SseManager;
+use crate::events::EventBus;
 
 const SOFT_CLIENT_CAP: u64 = 32;
 const HARD_CLIENT_CAP: u64 = 256;
 
 pub struct ListenerConfig {
     pub user_id: String,
-    pub sse: Arc<SseManager>,
+    pub sse: Arc<EventBus>,
     pub inject_tx: mpsc::Sender<IncomingMessage>,
     pub writer_buffer: usize,
     pub clients: ClientMap,
@@ -341,7 +341,7 @@ mod listener_tests {
     async fn listener_accepts_one_client_and_emits_hello() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("li.sock");
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let clients: ClientMap = Arc::new(tokio::sync::Mutex::new(Default::default()));
         let shutdown = Arc::new(Notify::new());
@@ -395,7 +395,7 @@ mod listener_tests {
     async fn listener_chmods_0600() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("perm.sock");
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let clients: ClientMap = Arc::new(tokio::sync::Mutex::new(Default::default()));
         let shutdown = Arc::new(Notify::new());

@@ -1,12 +1,12 @@
-//! `EventBus` — neutral alias for the cross-channel broadcast hub.
+//! `EventBus` — re-export of the cross-channel broadcast hub.
 //!
-//! Implementation currently lives at
-//! `crate::channels::web::platform::sse::SseManager`. Re-exported here
-//! so producers and consumers can use a name that does not lie about
-//! the bus being a web/SSE concern.
+//! The struct itself currently lives at
+//! `crate::channels::web::platform::sse` for historical reasons (it grew
+//! up inside the web gateway before becoming the universal event bus).
+//! It has been renamed there to `EventBus`; the old name `SseManager` is
+//! preserved as a legacy `pub type` alias in that file so the existing
+//! ~36 import sites keep working without churn.
 //!
-//! A subsequent commit moves the implementation into this file and
-//! turns `SseManager` into the legacy alias. Until then, this is a
-//! compile-time alias only — same struct, same broadcast channel.
+//! New code should import `crate::events::EventBus` from here.
 
-pub use crate::channels::web::platform::sse::SseManager as EventBus;
+pub use crate::channels::web::platform::sse::EventBus;

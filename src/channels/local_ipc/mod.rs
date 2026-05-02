@@ -19,7 +19,7 @@ pub use channel_impl::LocalIpcChannel;
 pub use error::LocalIpcError;
 pub use socket::{SocketResolution, resolve_socket_path};
 
-use crate::channels::web::platform::sse::SseManager;
+use crate::events::EventBus;
 
 /// Build a `LocalIpcChannel` ready to be added to `ChannelManager`, or
 /// `Ok(None)` if `IRONCLAW_LOCAL_SOCKET=disabled`.
@@ -29,7 +29,7 @@ use crate::channels::web::platform::sse::SseManager;
 /// caller can wire the channel into `ChannelManager` synchronously.
 pub async fn create(
     user_id: String,
-    sse: Arc<SseManager>,
+    sse: Arc<EventBus>,
     writer_buffer: usize,
 ) -> Result<Option<LocalIpcChannel>, LocalIpcError> {
     let path = match resolve_socket_path() {
@@ -87,7 +87,7 @@ mod tests {
         unsafe {
             std::env::set_var("IRONCLAW_LOCAL_SOCKET", "disabled");
         }
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let result = create("owner".into(), sse, 256).await.unwrap();
         unsafe {
             match prev {

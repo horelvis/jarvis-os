@@ -14,7 +14,7 @@ use crate::channels::local_ipc::control::{ControlError, build_control_submission
 use crate::channels::local_ipc::protocol::{
     ClientCommand, ClientId, IpcErrorKind, IpcHello, PROTOCOL_VERSION, TransportEvent,
 };
-use crate::channels::web::platform::sse::SseManager;
+use crate::events::EventBus;
 
 const MAX_LINE_BYTES: usize = 64 * 1024;
 pub const DEFAULT_WRITER_BUFFER: usize = 256;
@@ -46,7 +46,7 @@ pub async fn spawn_session(
     stream: UnixStream,
     client_id: ClientId,
     user_id: String,
-    sse: Arc<SseManager>,
+    sse: Arc<EventBus>,
     inject_tx: mpsc::Sender<IncomingMessage>,
     writer_buffer: usize,
 ) -> ClientHandle {
@@ -194,7 +194,7 @@ async fn run_writer_task(
     mut event_rx: mpsc::Receiver<WireMessage>,
     client_id: ClientId,
     user_id: String,
-    sse: Arc<SseManager>,
+    sse: Arc<EventBus>,
 ) {
     // Emit the synthetic ipc_hello before anything else.
     let hello = WireMessage::Transport(TransportEvent::IpcHello(IpcHello {
@@ -205,7 +205,7 @@ async fn run_writer_task(
         return;
     }
 
-    // Subscribe to ALL events on the SseManager (no user_id filter).
+    // Subscribe to ALL events on the EventBus (no user_id filter).
     //
     // local_ipc is single-user by design: the UNIX socket lives at
     // /run/user/<uid>/ironclaw.sock, owned exclusively by the desktop
@@ -316,7 +316,7 @@ mod tests {
     #[tokio::test]
     async fn writer_emits_hello_first() {
         let (server, client) = pair_unix().await;
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let _handle = spawn_session(
             server,
@@ -339,7 +339,7 @@ mod tests {
     #[tokio::test]
     async fn writer_forwards_direct_event() {
         let (server, client) = pair_unix().await;
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let handle = spawn_session(
             server,
@@ -368,7 +368,7 @@ mod tests {
     #[tokio::test]
     async fn malformed_line_emits_transport_error_to_client() {
         let (server, client) = pair_unix().await;
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let _handle = spawn_session(
             server,
@@ -405,7 +405,7 @@ mod tests {
     #[tokio::test]
     async fn reader_routes_message_to_inject_tx() {
         let (server, mut client) = pair_unix().await;
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (inject_tx, mut inject_rx) = mpsc::channel::<IncomingMessage>(8);
         let _handle = spawn_session(
             server,

@@ -8,14 +8,14 @@ use tracing::{debug, warn};
 
 use crate::channels::local_ipc::client::{ClientMap, WireMessage};
 use crate::channels::local_ipc::socket::{ListenerConfig, run_listener};
-use crate::channels::web::platform::sse::SseManager;
+use crate::events::EventBus;
 use crate::channels::{Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate};
 use crate::error::ChannelError;
 
 pub struct LocalIpcChannel {
     socket_path: PathBuf,
     user_id: String,
-    sse: Arc<SseManager>,
+    sse: Arc<EventBus>,
     writer_buffer: usize,
     clients: ClientMap,
     shutdown: Arc<Notify>,
@@ -25,7 +25,7 @@ impl LocalIpcChannel {
     pub fn new(
         socket_path: PathBuf,
         user_id: String,
-        sse: Arc<SseManager>,
+        sse: Arc<EventBus>,
         writer_buffer: usize,
     ) -> Self {
         Self {
@@ -111,7 +111,7 @@ impl Channel for LocalIpcChannel {
         status: StatusUpdate,
         metadata: &serde_json::Value,
     ) -> Result<(), ChannelError> {
-        // Translate StatusUpdate → AppEvent and broadcast via the SseManager
+        // Translate StatusUpdate → AppEvent and broadcast via the EventBus
         // shared with the agent loop. The writer task subscribed via
         // subscribe_raw(Some(user_id), false) so the broadcast fans out to
         // every connected local_ipc client whose user_id matches.

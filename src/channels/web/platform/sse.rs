@@ -35,13 +35,19 @@ pub(crate) struct ScopedEvent {
     pub(crate) event: AppEvent,
 }
 
-/// Manages SSE broadcast to all connected browser tabs.
+/// Cross-channel event broadcast hub.
 ///
-/// In multi-user mode, events are scoped by user_id so that each subscriber
+/// `EventBus` is the single broadcast channel that the agent loop, the
+/// bridge (engine v2), and `ChannelManager` publish `AppEvent`s to. Channels
+/// (web SSE/WS, local_ipc, voice daemon, future TUI subscriber) consume from
+/// it. The legacy alias `SseManager` is preserved at the bottom of this
+/// file so the ~36 sites that import `SseManager` keep working.
+///
+/// In multi-user mode, events are scoped by `user_id` so that each subscriber
 /// only receives events intended for their user (plus global events like
-/// Heartbeat). In single-user mode, all events are delivered to all subscribers
-/// (backwards compatible).
-pub struct SseManager {
+/// `Heartbeat`). In single-user mode, all events are delivered to all
+/// subscribers (backwards compatible).
+pub struct EventBus {
     tx: broadcast::Sender<ScopedEvent>,
     connection_count: Arc<AtomicU64>,
     /// Subset of `connection_count` that opted in to verbose/debug events.
@@ -54,8 +60,8 @@ pub struct SseManager {
     max_connections: u64,
 }
 
-impl SseManager {
-    /// Create a new SSE manager with default settings.
+impl EventBus {
+    /// Create a new event bus with default settings.
     pub fn new() -> Self {
         Self::with_max_connections_and_buffer(DEFAULT_MAX_CONNECTIONS, DEFAULT_BROADCAST_BUFFER)
     }
@@ -310,11 +316,15 @@ fn is_event_after(last_event_id: Option<&str>, current_event_id: &str) -> bool {
     current_seq > last_seq
 }
 
-impl Default for SseManager {
+impl Default for EventBus {
     fn default() -> Self {
         Self::new()
     }
 }
+
+/// Legacy alias preserved so the ~36 sites that import `SseManager` keep
+/// working without churn. New code should import `crate::events::EventBus`.
+pub type SseManager = EventBus;
 
 /// Stream wrapper that decrements connection counters on drop.
 ///
