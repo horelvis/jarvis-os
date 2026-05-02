@@ -89,7 +89,13 @@ QtObject {
         switch (ev.type) {
         case "tool_started":
             if (ev.call_id) {
-                var t = activeTools;
+                // Object.assign to a NEW object: QML's `property var` only
+                // fires *Changed on reference change, not deep mutation.
+                // Reassigning the same reference left bindings like
+                // Ring.agentActive (Object.keys(activeTools).length > 0)
+                // and ToolsActiveWidget.visibleByActivity stale — that was
+                // the orb-stays-IDLE bug.
+                var t = Object.assign({}, activeTools);
                 t[ev.call_id] = { name: ev.name, started_at: Date.now() };
                 activeTools = t;
             }
@@ -97,7 +103,7 @@ QtObject {
             break;
         case "tool_completed":
             if (ev.call_id && activeTools[ev.call_id]) {
-                var t = activeTools;
+                var t = Object.assign({}, activeTools);
                 delete t[ev.call_id];
                 activeTools = t;
             }
