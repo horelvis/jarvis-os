@@ -205,10 +205,25 @@ async fn run_writer_task(
         return;
     }
 
-    // Subscribe to the SseManager scoped to this user. None means we hit
-    // the global max_connections; the writer keeps serving direct
-    // respond()/send_status traffic on event_rx only.
-    let mut sse_stream = sse.subscribe_raw(Some(user_id), false);
+    // Subscribe to ALL events on the SseManager (no user_id filter).
+    //
+    // local_ipc is single-user by design: the UNIX socket lives at
+    // /run/user/<uid>/ironclaw.sock, owned exclusively by the desktop
+    // user. Filesystem permissions already enforce single-tenancy, so
+    // filtering by user_id at the broadcast layer was redundant — and
+    // it actively broke the channel: web auth uses the DB user_id
+    // (e.g. an admin row) while local_ipc was started with
+    // `config.owner_id` (literal "default"), so no event ever matched
+    // and every tool_started / tool_completed was silently dropped.
+    //
+    // `user_id` is still consumed above for ipc_hello.local_user_id
+    // — that field is informational for the QML/voice client.
+    //
+    // A `None` return below means the global max_connections cap was
+    // hit; the writer then serves direct respond()/send_status traffic
+    // on event_rx only.
+    let _ = user_id; // retained for ipc_hello above; not used for filtering
+    let mut sse_stream = sse.subscribe_raw(None, false);
 
     loop {
         let wire_opt: Option<WireMessage> = tokio::select! {

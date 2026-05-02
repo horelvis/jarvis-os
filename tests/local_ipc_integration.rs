@@ -97,30 +97,44 @@ async fn test_two_clients_receive_same_broadcast() {
 }
 
 #[tokio::test]
-async fn test_scoped_event_for_other_user_filtered() {
+async fn test_local_ipc_receives_all_users_events_no_filtering() {
+    // local_ipc is single-user by filesystem permissions on the
+    // /run/user/<uid>/ socket. The writer task subscribes to the
+    // SseManager with no user_id filter, so it must deliver events
+    // regardless of which user_id the broadcaster scoped them to.
+    //
+    // Regression: previously the writer subscribed with
+    // Some(config.owner_id) (literal "default"), but the web chat
+    // broadcasts with the authenticated DB user_id — no event ever
+    // matched and every tool_started / tool_completed was silently
+    // dropped before reaching the QML client.
     let dir = tempdir().unwrap();
     let path = dir.path().join("h3.sock");
     let (_chan, sse) = spawn_channel(path.clone()).await;
     let mut a = BufReader::new(UnixStream::connect(&path).await.unwrap());
     drain_hello(&mut a).await;
 
-    // Push a scoped event for a DIFFERENT user.
+    // Push a scoped event for a DIFFERENT user_id — the local_ipc
+    // writer should still see it.
     sse.broadcast_for_user("not-owner", AppEvent::Heartbeat);
-    // Then push a global event we DO want to see.
+    // And a global event.
     sse.broadcast(AppEvent::Heartbeat);
 
-    let mut la = String::new();
-    tokio::time::timeout(Duration::from_secs(2), a.read_line(&mut la))
+    // First line: scoped-to-other-user heartbeat must arrive.
+    let mut first = String::new();
+    tokio::time::timeout(Duration::from_secs(2), a.read_line(&mut first))
         .await
-        .unwrap()
+        .expect("scoped event for different user_id must reach local_ipc")
         .unwrap();
-    // The line we receive should be the global heartbeat — count proves
-    // the filter worked: only ONE line should be in the pipe (the global
-    // one). Read with a short timeout to confirm no extra event.
+    assert!(first.contains("heartbeat"));
+
+    // Second line: global heartbeat must also arrive.
     let mut second = String::new();
-    let res = tokio::time::timeout(Duration::from_millis(300), a.read_line(&mut second)).await;
-    assert!(res.is_err(), "second read must time out (no extra event)");
-    assert!(la.contains("heartbeat"));
+    tokio::time::timeout(Duration::from_secs(2), a.read_line(&mut second))
+        .await
+        .expect("global broadcast must reach local_ipc")
+        .unwrap();
+    assert!(second.contains("heartbeat"));
 }
 
 use futures::StreamExt;
