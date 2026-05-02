@@ -156,15 +156,20 @@ PanelWindow {
                 ctx.fill();
 
                 // ─── Outer ring: glow + segmented + 64 ticks ─────────
+                // Ticks float between the outer ring (at outerR) and
+                // the outermost ring (at outerR + 30). Centered at
+                // outerR + 22 with length 10 → run from outerR + 12 to
+                // outerR + 22, leaving ~12 px of clear space on the
+                // inner side and ~8 px on the outer side.
                 glowCircle(outerR, 5, ring.colorPrimary, 0.95, 10);
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
-                ticks(outerR + 18, 64, 14, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
+                ticks(outerR + 22, 64, 10, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
                 // ─── Outermost ring: uniform thickness, separated from ticks
-                // The 64 ticks end at outerR + 18; this ring sits at
-                // outerR + 30 so there's a visible breathing gap
-                // between the radial tick marks and the closing ring.
-                glowCircle(outerR + 30, 3, ring.colorPrimary, 0.92, 12);
+                // The 64 ticks end at outerR + 22; this ring sits at
+                // outerR + 30 with a thick 9 px stroke (3× the
+                // previous 3 px) so it visually frames the whole orb.
+                glowCircle(outerR + 30, 9, ring.colorPrimary, 0.92, 12);
 
                 // ─── Middle ring ─────────────────────────────────────
                 segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
@@ -208,7 +213,11 @@ PanelWindow {
                 }
 
                 // ─── Clock hand field: 60 uniform ticks rotating ─────
-                ticks(innerR + 12, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
+                // Separated from the inner two-piece ring (at innerR)
+                // with a clear gap. Ticks are centered at innerR + 18
+                // with length 5 → run from innerR + 13 to innerR + 18,
+                // floating between the inner ring and the middle ring.
+                ticks(innerR + 18, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
                 // ─── Inner "variable" ring: discrete two-piece, static ─
                 // 270° thick segment + 90° thin segment. The user wants
