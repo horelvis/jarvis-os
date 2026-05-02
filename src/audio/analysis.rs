@@ -1,9 +1,10 @@
 //! PCM → (RMS, FFT bands) analysis for the orb's audio reactivity.
 //!
-//! Called by the orchestrator immediately before each TTS PCM chunk is
-//! handed to the speaker, so the values published over IPC track what
-//! the user is about to hear — ~speaker latency apart, but visually
-//! indistinguishable from "in sync" at orb refresh rates.
+//! Lives in IronClaw core (not in any specific TTS backend) so every
+//! `TtsBackend` impl — current voice-daemon IPC bridge or future
+//! in-process engines like Piper / Kokoro — feeds raw PCM into the same
+//! pipeline and the same numeric definition of "audio level" reaches
+//! the UI orb.
 //!
 //! Pipeline:
 //! - Convert `i16 → f32` in `[-1, 1]`.

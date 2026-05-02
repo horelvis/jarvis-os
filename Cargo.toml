@@ -113,6 +113,11 @@ cron = "0.13"
 # for remote $ref resolution (we only validate against in-memory schemas).
 jsonschema = { version = "0.45", default-features = false }
 
+# FFT for the TTS audio level pipeline (`src/audio/analysis.rs`).
+# Used by `analyze_pcm` to extract the per-band magnitudes the orb's
+# audio bands react to.
+rustfft = "6"
+
 # Shared types
 ironclaw_common = { path = "crates/ironclaw_common", version = "0.2.0" }
 
