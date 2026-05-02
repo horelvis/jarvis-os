@@ -8,6 +8,7 @@
 
 mod audio;
 mod config;
+mod ipc_publisher;
 mod orchestrator;
 mod protocol;
 mod ws_client;

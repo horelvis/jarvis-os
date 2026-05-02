@@ -10,6 +10,7 @@
 
 use crate::audio;
 use crate::config::Config;
+use crate::ipc_publisher::{IpcPublisher, resolve_socket_path};
 use crate::protocol::{ClientToolCall, ClientToolResult};
 use crate::ws_client::{Inbound, Outbound, connect};
 use anyhow::Result;
@@ -22,6 +23,17 @@ pub async fn run(cfg: Config) -> Result<()> {
         speaker_tx,
         ..
     } = audio_io;
+
+    // IronClaw IPC publisher — sends each TTS PCM chunk to IronClaw's
+    // TtsAudioPipeline so the orb's audio bands can react in real
+    // time. None when `IRONCLAW_LOCAL_SOCKET=disabled`; in that mode
+    // the daemon plays audio without informing IronClaw.
+    let ipc_publisher = resolve_socket_path().map(IpcPublisher::spawn);
+    if ipc_publisher.is_some() {
+        tracing::info!("ipc_publisher enabled — TTS audio will reach IronClaw orb");
+    } else {
+        tracing::info!("ipc_publisher disabled (IRONCLAW_LOCAL_SOCKET=disabled)");
+    }
 
     // WebSocket.
     let mut ws = connect(&cfg).await?;
@@ -52,6 +64,13 @@ pub async fn run(cfg: Config) -> Result<()> {
             evt = ws.inbound_rx.recv() => {
                 match evt {
                     Some(Inbound::AgentAudio(pcm)) => {
+                        // Publish to IronClaw BEFORE playing. The
+                        // pipeline analysis runs in parallel with cpal
+                        // playback, so by the time the user hears the
+                        // PCM the orb is already reacting to it.
+                        if let Some(pub_) = ipc_publisher.as_ref() {
+                            pub_.publish_pcm(&pcm, audio::SAMPLE_RATE);
+                        }
                         speaker_tx.play(pcm);
                     }
                     Some(Inbound::UserTranscript(text)) => {
