@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use ironclaw::channels::Channel;
 use ironclaw::channels::local_ipc::LocalIpcChannel;
-use ironclaw::channels::web::sse::SseManager;
+use ironclaw::channels::web::sse::EventBus;
 use ironclaw_common::AppEvent;
 use tempfile::tempdir;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -27,8 +27,8 @@ async fn wait_for_bind(path: &std::path::Path) {
     panic!("listener did not bind {} within 2s", path.display());
 }
 
-async fn spawn_channel(socket_path: std::path::PathBuf) -> (Arc<LocalIpcChannel>, Arc<SseManager>) {
-    let sse = Arc::new(SseManager::new());
+async fn spawn_channel(socket_path: std::path::PathBuf) -> (Arc<LocalIpcChannel>, Arc<EventBus>) {
+    let sse = Arc::new(EventBus::new());
     let chan = Arc::new(LocalIpcChannel::new(
         socket_path.clone(),
         "owner".into(),
@@ -100,7 +100,7 @@ async fn test_two_clients_receive_same_broadcast() {
 async fn test_local_ipc_receives_all_users_events_no_filtering() {
     // local_ipc is single-user by filesystem permissions on the
     // /run/user/<uid>/ socket. The writer task subscribes to the
-    // SseManager with no user_id filter, so it must deliver events
+    // EventBus with no user_id filter, so it must deliver events
     // regardless of which user_id the broadcaster scoped them to.
     //
     // Regression: previously the writer subscribed with
@@ -146,10 +146,10 @@ async fn spawn_channel_with_stream(
     socket_path: std::path::PathBuf,
 ) -> (
     Arc<LocalIpcChannel>,
-    Arc<SseManager>,
+    Arc<EventBus>,
     std::pin::Pin<Box<dyn futures::Stream<Item = IncomingMessage> + Send>>,
 ) {
-    let sse = Arc::new(SseManager::new());
+    let sse = Arc::new(EventBus::new());
     let chan = Arc::new(LocalIpcChannel::new(
         socket_path.clone(),
         "owner".into(),
@@ -282,7 +282,7 @@ async fn test_client_disconnect_releases_resources() {
 async fn test_socket_file_cleanup_on_shutdown() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("h8.sock");
-    let sse = Arc::new(SseManager::new());
+    let sse = Arc::new(EventBus::new());
     let chan = LocalIpcChannel::new(path.clone(), "owner".into(), sse, 16);
     let _ = chan.start().await.unwrap();
     wait_for_bind(&path).await;
@@ -355,7 +355,7 @@ async fn test_slow_client_does_not_block_others() {
     drain_hello(&mut fast).await;
 
     // Push enough events to overflow the slow client's mpsc (cap 16
-    // per spawn_channel) but well within the SseManager broadcast
+    // per spawn_channel) but well within the EventBus broadcast
     // buffer.
     for _ in 0..32 {
         sse.broadcast(AppEvent::Heartbeat);

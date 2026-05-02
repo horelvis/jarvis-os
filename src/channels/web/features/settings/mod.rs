@@ -1272,7 +1272,7 @@ mod tests {
     fn test_gateway_state(secrets: Arc<dyn SecretsStore + Send + Sync>) -> GatewayState {
         GatewayState {
             msg_tx: tokio::sync::RwLock::new(None),
-            sse: Arc::new(crate::channels::web::sse::SseManager::new()),
+            sse: Arc::new(crate::channels::web::sse::EventBus::new()),
             workspace: None,
             workspace_pool: None,
             multi_tenant_mode: false,

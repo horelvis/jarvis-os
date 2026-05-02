@@ -121,7 +121,7 @@ pub struct PendingOAuthLaunchParams {
     pub extra_params: HashMap<String, String>,
     pub user_id: String,
     pub secrets: Arc<dyn SecretsStore + Send + Sync>,
-    pub sse_manager: Option<Arc<crate::channels::web::sse::SseManager>>,
+    pub sse_manager: Option<Arc<crate::channels::web::sse::EventBus>>,
     pub gateway_token: Option<String>,
     pub token_exchange_extra_params: HashMap<String, String>,
     pub client_id_secret_name: Option<String>,

@@ -555,11 +555,11 @@ mod tests {
 
     /// Helper to create a GatewayState for testing.
     async fn make_test_state(msg_tx: Option<mpsc::Sender<IncomingMessage>>) -> GatewayState {
-        use crate::channels::web::sse::SseManager;
+        use crate::channels::web::sse::EventBus;
 
         GatewayState {
             msg_tx: tokio::sync::RwLock::new(msg_tx),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: None,
             workspace_pool: None,
             multi_tenant_mode: false,

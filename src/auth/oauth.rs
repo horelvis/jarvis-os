@@ -595,7 +595,7 @@ pub struct PendingOAuthFlow {
     /// Secrets store reference for token persistence.
     pub secrets: Arc<dyn SecretsStore + Send + Sync>,
     /// SSE broadcast manager for notifying the web UI.
-    pub sse_manager: Option<Arc<crate::channels::web::sse::SseManager>>,
+    pub sse_manager: Option<Arc<crate::channels::web::sse::EventBus>>,
     /// OAuth proxy auth token for authenticating with the hosted token exchange proxy.
     /// Kept as `gateway_token` for public API compatibility.
     pub gateway_token: Option<String>,

@@ -20,7 +20,7 @@ use crate::agent::SessionManager;
 use crate::channels::IncomingMessage;
 use crate::channels::web::auth::UserIdentity;
 use crate::channels::web::log_layer::LogBroadcaster;
-use crate::channels::web::sse::SseManager;
+use crate::channels::web::sse::EventBus;
 use crate::db::Database;
 use crate::extensions::ExtensionManager;
 use crate::orchestrator::job_manager::ContainerJobManager;
@@ -339,7 +339,7 @@ pub struct GatewayState {
     /// Channel to send messages to the agent loop.
     pub msg_tx: tokio::sync::RwLock<Option<mpsc::Sender<IncomingMessage>>>,
     /// SSE broadcast manager (Arc-wrapped so extension manager can hold a reference).
-    pub sse: Arc<SseManager>,
+    pub sse: Arc<EventBus>,
     /// Workspace for memory API (single-user fallback).
     pub workspace: Option<Arc<Workspace>>,
     /// Optional per-user workspace resolver/pool.

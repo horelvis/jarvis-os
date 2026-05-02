@@ -22,7 +22,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use ironclaw::channels::IncomingMessage;
 use ironclaw::channels::web::platform::router::start_server;
 use ironclaw::channels::web::platform::state::GatewayState;
-use ironclaw::channels::web::sse::SseManager;
+use ironclaw::channels::web::sse::EventBus;
 use ironclaw::channels::web::ws::WsConnectionTracker;
 use ironclaw_common::AppEvent;
 
@@ -40,7 +40,7 @@ async fn start_test_server() -> (
 
     let state = Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(Some(agent_tx)),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,

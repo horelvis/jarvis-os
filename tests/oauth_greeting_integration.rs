@@ -16,7 +16,7 @@ mod tests {
     use ironclaw::channels::web::auth::{MultiAuthState, UserIdentity};
     use ironclaw::channels::web::platform::router::start_server;
     use ironclaw::channels::web::platform::state::{GatewayState, PerUserRateLimiter, RateLimiter};
-    use ironclaw::channels::web::sse::SseManager;
+    use ironclaw::channels::web::sse::EventBus;
     use ironclaw::channels::web::ws::WsConnectionTracker;
     use ironclaw::db::Database;
     use ironclaw::workspace::GREETING_SEED;
@@ -60,7 +60,7 @@ mod tests {
 
         let state = Arc::new(GatewayState {
             msg_tx: tokio::sync::RwLock::new(Some(agent_tx)),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: None,
             workspace_pool: None,
             multi_tenant_mode: true,

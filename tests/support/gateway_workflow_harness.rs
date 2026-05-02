@@ -17,7 +17,7 @@ use ironclaw::channels::web::auth::MultiAuthState;
 use ironclaw::channels::web::log_layer::LogBroadcaster;
 use ironclaw::channels::web::platform::router::start_server;
 use ironclaw::channels::web::platform::state::{GatewayState, PerUserRateLimiter, RateLimiter};
-use ironclaw::channels::web::sse::SseManager;
+use ironclaw::channels::web::sse::EventBus;
 use ironclaw::channels::web::ws::WsConnectionTracker;
 use ironclaw::config::{Config, RegistryProviderConfig, RoutineConfig};
 use ironclaw::db::Database;
@@ -213,7 +213,7 @@ impl GatewayWorkflowHarness {
 
         let gateway_state = Arc::new(GatewayState {
             msg_tx: tokio::sync::RwLock::new(Some(gw_tx)),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: components.workspace.clone(),
             workspace_pool: None,
             multi_tenant_mode: false,

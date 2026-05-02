@@ -40,8 +40,8 @@ pub(crate) struct ScopedEvent {
 /// `EventBus` is the single broadcast channel that the agent loop, the
 /// bridge (engine v2), and `ChannelManager` publish `AppEvent`s to. Channels
 /// (web SSE/WS, local_ipc, voice daemon, future TUI subscriber) consume from
-/// it. The legacy alias `SseManager` is preserved at the bottom of this
-/// file so the ~36 sites that import `SseManager` keep working.
+/// it. The legacy alias `EventBus` is preserved at the bottom of this
+/// file so the ~36 sites that import `EventBus` keep working.
 ///
 /// In multi-user mode, events are scoped by `user_id` so that each subscriber
 /// only receives events intended for their user (plus global events like
@@ -322,10 +322,6 @@ impl Default for EventBus {
     }
 }
 
-/// Legacy alias preserved so the ~36 sites that import `SseManager` keep
-/// working without churn. New code should import `crate::events::EventBus`.
-pub type SseManager = EventBus;
-
 /// Stream wrapper that decrements connection counters on drop.
 ///
 /// When the SSE client disconnects, this stream is dropped and
@@ -366,21 +362,21 @@ mod tests {
 
     #[test]
     fn test_sse_manager_creation() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         assert_eq!(manager.connection_count(), 0);
         assert_eq!(manager.max_connections(), DEFAULT_MAX_CONNECTIONS);
     }
 
     #[test]
     fn test_broadcast_without_receivers() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         // Should not panic even with no receivers
         manager.broadcast(AppEvent::Heartbeat);
     }
 
     #[tokio::test]
     async fn test_broadcast_to_receiver() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         let mut stream = Box::pin(
             manager
                 .subscribe_raw(None, false)
@@ -401,7 +397,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_raw_receives_events() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         let mut stream = Box::pin(
             manager
                 .subscribe_raw(None, false)
@@ -424,7 +420,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_raw_decrements_on_drop() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         {
             let _stream = Box::pin(
                 manager
@@ -439,7 +435,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_raw_multiple_subscribers() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         let mut s1 = Box::pin(
             manager
                 .subscribe_raw(None, false)
@@ -467,7 +463,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_raw_rejects_over_limit() {
-        let mut manager = SseManager::new();
+        let mut manager = EventBus::new();
         manager.max_connections = 2; // Low limit for testing
 
         let _s1 = Box::pin(
@@ -489,7 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_scoped_events_filtered_by_user() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         let mut alice = Box::pin(
             manager
                 .subscribe_raw(Some("alice".to_string()), false)
@@ -528,7 +524,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_verbose_filtering() {
-        let manager = SseManager::new();
+        let manager = EventBus::new();
         let mut verbose = Box::pin(
             manager
                 .subscribe_raw(None, true)
@@ -582,7 +578,7 @@ mod tests {
     #[tokio::test]
     async fn test_buffer_size_honored() {
         // A buffer of 4 should hold all events without lag.
-        let large = SseManager::with_max_connections_and_buffer(10, 4);
+        let large = EventBus::with_max_connections_and_buffer(10, 4);
         let mut large_stream =
             Box::pin(large.subscribe_raw(None, false).expect("should subscribe"));
 
@@ -606,7 +602,7 @@ mod tests {
         );
 
         // A buffer of 2 causes lag when sending 4 events before reading.
-        let small = SseManager::with_max_connections_and_buffer(10, 2);
+        let small = EventBus::with_max_connections_and_buffer(10, 2);
         let mut small_stream =
             Box::pin(small.subscribe_raw(None, false).expect("should subscribe"));
 

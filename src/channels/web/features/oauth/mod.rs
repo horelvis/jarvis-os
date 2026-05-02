@@ -804,7 +804,7 @@ mod tests {
 
     use crate::channels::web::platform::state::GatewayState;
 
-    use crate::channels::web::sse::SseManager;
+    use crate::channels::web::sse::EventBus;
     use crate::channels::web::test_helpers::{
         test_ext_mgr, test_gateway_state, test_secrets_store,
     };
@@ -945,7 +945,7 @@ mod tests {
 
     fn fresh_pending_oauth_flow(
         secrets: Arc<dyn crate::secrets::SecretsStore + Send + Sync>,
-        sse_manager: Option<Arc<SseManager>>,
+        sse_manager: Option<Arc<EventBus>>,
         oauth_proxy_auth_token: Option<String>,
     ) -> crate::auth::oauth::PendingOAuthFlow {
         crate::auth::oauth::PendingOAuthFlow {
@@ -1152,7 +1152,7 @@ mod tests {
             )));
         let (ext_mgr, _wasm_tools_dir, _wasm_channels_dir) = test_ext_mgr(secrets.clone());
 
-        let sse_mgr = Arc::new(SseManager::new());
+        let sse_mgr = Arc::new(EventBus::new());
         let mut receiver = sse_mgr.sender().subscribe();
         let created_at = expired_flow_created_at();
         let flow = crate::auth::oauth::PendingOAuthFlow {
@@ -1511,7 +1511,7 @@ mod tests {
 
         let secrets = test_secrets_store();
         let (ext_mgr, _wasm_tools_dir, _wasm_channels_dir) = test_ext_mgr(Arc::clone(&secrets));
-        let sse_mgr = Arc::new(SseManager::new());
+        let sse_mgr = Arc::new(EventBus::new());
         let mut receiver = sse_mgr.sender().subscribe();
         let flow = fresh_pending_oauth_flow(
             Arc::clone(&secrets),
@@ -1614,7 +1614,7 @@ mod tests {
 
         let secrets = test_secrets_store();
         let (ext_mgr, _wasm_tools_dir, _wasm_channels_dir) = test_ext_mgr(Arc::clone(&secrets));
-        let sse_mgr = Arc::new(SseManager::new());
+        let sse_mgr = Arc::new(EventBus::new());
         let mut receiver = sse_mgr.sender().subscribe();
         let flow = fresh_pending_oauth_flow(
             Arc::clone(&secrets),
@@ -1711,7 +1711,7 @@ mod tests {
 
         let secrets = test_secrets_store();
         let (ext_mgr, _wasm_tools_dir, _wasm_channels_dir) = test_ext_mgr(Arc::clone(&secrets));
-        let sse_mgr = Arc::new(SseManager::new());
+        let sse_mgr = Arc::new(EventBus::new());
         let mut receiver = sse_mgr.sender().subscribe();
         let mut flow = fresh_pending_oauth_flow(
             Arc::clone(&secrets),
@@ -1781,7 +1781,7 @@ mod tests {
 
         let secrets = test_secrets_store();
         let (ext_mgr, _wasm_tools_dir, _wasm_channels_dir) = test_ext_mgr(Arc::clone(&secrets));
-        let sse_mgr = Arc::new(SseManager::new());
+        let sse_mgr = Arc::new(EventBus::new());
         let mut receiver = sse_mgr.sender().subscribe();
         let flow = fresh_pending_oauth_flow(
             Arc::clone(&secrets),

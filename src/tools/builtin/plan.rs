@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::channels::web::sse::SseManager;
+use crate::channels::web::sse::EventBus;
 use crate::context::JobContext;
 use crate::tools::tool::{Tool, ToolError, ToolOutput, require_str};
 use ironclaw_common::{AppEvent, PlanStepDto};
@@ -17,7 +17,7 @@ use ironclaw_common::{AppEvent, PlanStepDto};
 /// Tool for emitting structured plan progress updates via SSE.
 #[derive(Default)]
 pub struct PlanUpdateTool {
-    sse_tx: Option<Arc<SseManager>>,
+    sse_tx: Option<Arc<EventBus>>,
 }
 
 impl PlanUpdateTool {
@@ -25,7 +25,7 @@ impl PlanUpdateTool {
         Self::default()
     }
 
-    pub fn with_sse(mut self, sse: Arc<SseManager>) -> Self {
+    pub fn with_sse(mut self, sse: Arc<EventBus>) -> Self {
         self.sse_tx = Some(sse);
         self
     }

@@ -821,8 +821,8 @@ impl ToolRegistry {
     ///
     /// The plan_update tool lets the LLM emit structured plan progress
     /// checklist events via SSE. Works without SSE (no broadcast), but
-    /// pass the `SseManager` for real-time UI updates.
-    pub fn register_plan_tools(&self, sse: Option<Arc<crate::channels::web::sse::SseManager>>) {
+    /// pass the `EventBus` for real-time UI updates.
+    pub fn register_plan_tools(&self, sse: Option<Arc<crate::channels::web::sse::EventBus>>) {
         let mut tool = PlanUpdateTool::new();
         if let Some(sse) = sse {
             tool = tool.with_sse(sse);

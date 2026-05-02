@@ -959,8 +959,8 @@ pub trait ChannelSecretUpdater: Send + Sync {
 ///
 /// Used by both [`crate::channels::web`] and `local_ipc` channels so the
 /// translation lives in exactly one place. Channel impls layer their own
-/// transport on top — web broadcasts via SseManager, local_ipc broadcasts
-/// via the same SseManager (its writer task is subscribed).
+/// transport on top — web broadcasts via EventBus, local_ipc broadcasts
+/// via the same EventBus (its writer task is subscribed).
 pub fn status_update_to_app_event(
     status: StatusUpdate,
     thread_id: Option<String>,

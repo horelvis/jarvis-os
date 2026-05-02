@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 use ironclaw::channels::web::platform::router::start_server;
 
 use ironclaw::channels::web::platform::state::GatewayState;
-use ironclaw::channels::web::sse::SseManager;
+use ironclaw::channels::web::sse::EventBus;
 use ironclaw::channels::web::ws::WsConnectionTracker;
 use ironclaw::error::LlmError;
 use ironclaw::llm::{
@@ -194,7 +194,7 @@ async fn start_test_server_with_provider(
 ) -> (SocketAddr, Arc<GatewayState>) {
     let state = Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,
@@ -717,7 +717,7 @@ async fn test_no_llm_provider_returns_503() {
     // Create state WITHOUT llm_provider
     let state = Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,

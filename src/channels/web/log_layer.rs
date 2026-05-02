@@ -29,7 +29,7 @@ use tracing_subscriber::{EnvFilter, Layer, reload};
 use ironclaw_common::AppEvent;
 use ironclaw_safety::LeakDetector;
 
-use super::platform::sse::SseManager;
+use super::platform::sse::EventBus;
 
 /// Maximum number of recent log entries kept for late-joining SSE subscribers.
 const HISTORY_CAP: usize = 500;
@@ -305,7 +305,7 @@ impl WebLogLayer {
 /// `AppEvent::Warning` so the debug inspector's Activity tab can surface
 /// warnings alongside tool/LLM events.
 ///
-/// The event is verbose-only at the `SseManager` layer, so only debug
+/// The event is verbose-only at the `EventBus` layer, so only debug
 /// subscribers receive it. When `owner_id` is `Some`, warnings are
 /// scoped to that user to avoid leaking per-request log context across
 /// tenants in multi-tenant deployments; in single-user mode they may be
@@ -318,7 +318,7 @@ impl WebLogLayer {
 /// loop alive on lag and exits only when the broadcaster closes.
 pub fn spawn_warning_bridge(
     broadcaster: Arc<LogBroadcaster>,
-    sse: Arc<SseManager>,
+    sse: Arc<EventBus>,
     owner_id: Option<String>,
 ) {
     let mut rx = broadcaster.subscribe();

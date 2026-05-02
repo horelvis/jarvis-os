@@ -415,7 +415,7 @@ pub struct ExtensionManager {
     /// Last activation error for each WASM channel (ephemeral, cleared on success).
     activation_errors: RwLock<HashMap<String, String>>,
     /// SSE broadcast manager (set post-construction via `set_sse_sender()`).
-    sse_manager: RwLock<Option<Arc<crate::channels::web::sse::SseManager>>>,
+    sse_manager: RwLock<Option<Arc<crate::channels::web::sse::EventBus>>>,
     /// Shared registry of pending OAuth flows for gateway-routed callbacks.
     ///
     /// Keyed by CSRF `state` parameter. Populated in `start_wasm_oauth()`
@@ -1359,7 +1359,7 @@ impl ExtensionManager {
     }
 
     /// Set the SSE broadcast sender for pushing extension status events to the web UI.
-    pub async fn set_sse_sender(&self, sse: Arc<crate::channels::web::sse::SseManager>) {
+    pub async fn set_sse_sender(&self, sse: Arc<crate::channels::web::sse::EventBus>) {
         *self.sse_manager.write().await = Some(sse);
     }
 
@@ -1371,7 +1371,7 @@ impl ExtensionManager {
         &self.pending_oauth_flows
     }
 
-    pub async fn sse_sender(&self) -> Option<Arc<crate::channels::web::sse::SseManager>> {
+    pub async fn sse_sender(&self) -> Option<Arc<crate::channels::web::sse::EventBus>> {
         self.sse_manager.read().await.clone()
     }
 

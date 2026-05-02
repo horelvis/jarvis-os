@@ -5,7 +5,7 @@
 //! Channels (web, local_ipc, TUI, voice daemon) are *consumers* — they
 //! subscribe to the bus and forward events to their respective surfaces.
 //!
-//! Today this module re-exports the existing `SseManager` under the
+//! Today this module re-exports the existing `EventBus` under the
 //! neutral name `EventBus` so callers can start migrating without code
 //! motion. Subsequent commits move the implementation here, eliminate
 //! the per-channel rebroadcast pattern (`WebChannel::send_status` etc.),

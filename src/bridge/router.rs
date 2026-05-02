@@ -21,7 +21,7 @@ use crate::bridge::engine_actions::mission_capability_actions;
 use crate::bridge::llm_adapter::LlmBridgeAdapter;
 use crate::bridge::store_adapter::HybridStore;
 use crate::channels::web::GATEWAY_CHANNEL_NAME;
-use crate::channels::web::sse::SseManager;
+use crate::channels::web::sse::EventBus;
 use crate::channels::{IncomingMessage, OutgoingResponse, StatusUpdate};
 use crate::db::Database;
 use crate::error::Error;
@@ -655,7 +655,7 @@ fn parse_credential_name(text: &str) -> Option<String> {
 /// Notify all surfaces about a pending gate: SSE broadcast (if `sse` is
 /// some) plus the channel-level status event and the user-facing prompt.
 ///
-/// Takes `sse` as an owned `Option<Arc<SseManager>>` rather than borrowing
+/// Takes `sse` as an owned `Option<Arc<EventBus>>` rather than borrowing
 /// from `&EngineState` so callers can clone the Arc out of the engine
 /// state read-guard and `drop(guard)` *before* awaiting on broadcast +
 /// channel I/O. Holding the engine state guard across these awaits is
@@ -673,7 +673,7 @@ fn parse_credential_name(text: &str) -> Option<String> {
 /// await, keeping the read-lock scope tight.
 async fn notify_pending_gate(
     agent: &Agent,
-    sse: Option<Arc<SseManager>>,
+    sse: Option<Arc<EventBus>>,
     tools: &crate::tools::ToolRegistry,
     auth_manager: Option<&AuthManager>,
     extension_manager: Option<&crate::extensions::ExtensionManager>,
@@ -1257,7 +1257,7 @@ struct EngineState {
     /// Unified pending gate store — keyed by (user_id, thread_id).
     pending_gates: Arc<crate::gate::store::PendingGateStore>,
     /// SSE manager for broadcasting AppEvents to the web gateway.
-    sse: Option<Arc<SseManager>>,
+    sse: Option<Arc<EventBus>>,
     /// V1 database for writing conversation messages (gateway reads from here).
     db: Option<Arc<dyn Database>>,
     /// Secrets store for storing credentials after auth flow.
@@ -3388,7 +3388,7 @@ async fn handle_with_engine_inner(
             // then drop the engine read guard before awaiting on
             // broadcast + channel I/O. The auth branch above does the
             // same, and `notify_pending_gate` is signed to accept an
-            // owned Option<Arc<SseManager>> precisely so this
+            // owned Option<Arc<EventBus>> precisely so this
             // terminal-return branch can release the lock. The tools
             // registry handle is needed by `notify_pending_gate` to
             // resolve the auth-gate display name without holding the
@@ -4131,7 +4131,7 @@ fn interpret_message_event(role: &str, content_preview: &str) -> Option<&'static
 pub(crate) async fn handle_mission_notification(
     notif: &ironclaw_engine::MissionNotification,
     channels: &std::sync::Arc<crate::channels::ChannelManager>,
-    sse: Option<&Arc<SseManager>>,
+    sse: Option<&Arc<EventBus>>,
     db: Option<&Arc<dyn Database>>,
     conv_mgr: Option<&ironclaw_engine::ConversationManager>,
 ) {
@@ -6641,7 +6641,7 @@ mod tests {
     }
 
     async fn make_router_test_agent(
-        sse: Option<Arc<SseManager>>,
+        sse: Option<Arc<EventBus>>,
     ) -> (Agent, Arc<TokioMutex<Vec<StatusUpdate>>>) {
         struct StaticLlmProvider;
 
@@ -6838,7 +6838,7 @@ mod tests {
     #[tokio::test]
     async fn insert_and_notify_pending_gate_sends_status_no_text() {
         let store = Arc::new(TestStore::new());
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let mut event_stream = Box::pin(
             sse.subscribe_raw(Some("alice".to_string()), false)
                 .expect("subscribe raw"),
@@ -6906,7 +6906,7 @@ mod tests {
     #[tokio::test]
     async fn insert_and_notify_pending_gate_uses_extension_manager_for_auth_display_name() {
         let store = Arc::new(TestStore::new());
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let (ext_mgr, _wasm_tools_dir, wasm_channels_dir) = test_extension_manager();
         let channel_name = "test_channel";
         write_fake_wasm_channel(&wasm_channels_dir, channel_name);
@@ -6976,7 +6976,7 @@ mod tests {
     async fn handle_with_engine_re_emits_pending_approval_on_follow_up() {
         let _guard = ENGINE_STATE_TEST_LOCK.lock().await;
         let store = Arc::new(TestStore::new());
-        let sse = Arc::new(SseManager::new());
+        let sse = Arc::new(EventBus::new());
         let _receiver = sse.sender().subscribe();
         let (agent, statuses) = make_router_test_agent(Some(Arc::clone(&sse))).await;
         let mut state = make_expected_test_state(store);
@@ -9036,7 +9036,7 @@ mod tests {
 
         let outcome = async {
             let store = Arc::new(TestStore::new());
-            let sse = Arc::new(SseManager::new());
+            let sse = Arc::new(EventBus::new());
             let mut event_stream = Box::pin(
                 sse.subscribe_raw(Some("alice".to_string()), false)
                     .expect("subscribe raw"),

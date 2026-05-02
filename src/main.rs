@@ -830,7 +830,7 @@ async fn async_main() -> anyhow::Result<()> {
     // ── Gateway channel ────────────────────────────────────────────────
 
     let mut gateway_url: Option<String> = None;
-    let mut sse_manager: Option<std::sync::Arc<ironclaw::channels::web::sse::SseManager>> = None;
+    let mut sse_manager: Option<std::sync::Arc<ironclaw::channels::web::sse::EventBus>> = None;
     if enable_non_cli && let Some(ref gw_config) = config.channels.gateway {
         let mut gw = GatewayChannel::new(gw_config.clone(), config.owner_id.clone());
         gw = gw.with_multi_tenant_mode(config.is_multi_tenant_deployment());
@@ -1032,7 +1032,7 @@ async fn async_main() -> anyhow::Result<()> {
 
         // Capture SSE sender and routine engine slot before moving gw into channels.
         // IMPORTANT: This must come after all `with_*` calls since `rebuild_state`
-        // creates a new SseManager, which would orphan this sender.
+        // creates a new EventBus, which would orphan this sender.
         sse_manager = Some(Arc::clone(&gw.state().sse));
         channel_names.push("gateway".to_string());
         channels.add(Box::new(gw)).await;
@@ -1040,7 +1040,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     // ── Local UNIX-socket IPC channel (replaces jarvis_ui_bridge) ──────
     //
-    // Reuses the gateway's SseManager when present; otherwise materializes
+    // Reuses the gateway's EventBus when present; otherwise materializes
     // its own and assigns it to `sse_manager` so the agent loop's
     // `sse_tx` (set further down at the AgentDeps init) sees the same Arc
     // and feeds it. Without that assignment, local_ipc subscribers would
@@ -1049,7 +1049,7 @@ async fn async_main() -> anyhow::Result<()> {
         let sse_for_local = match sse_manager.as_ref() {
             Some(existing) => Arc::clone(existing),
             None => {
-                let fresh = Arc::new(ironclaw::channels::web::sse::SseManager::new());
+                let fresh = Arc::new(ironclaw::channels::web::sse::EventBus::new());
                 sse_manager = Some(Arc::clone(&fresh));
                 fresh
             }

@@ -22,7 +22,7 @@ use crate::channels::web::auth::{
 use crate::channels::web::platform::state::{
     ActiveConfigSnapshot, GatewayState, PerUserRateLimiter, PromptQueue, RateLimiter, WorkspacePool,
 };
-use crate::channels::web::sse::SseManager;
+use crate::channels::web::sse::EventBus;
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ fn build_state(
 ) -> Arc<GatewayState> {
     Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,
@@ -1262,7 +1262,7 @@ mod admin_tool_policy {
         );
         Arc::new(GatewayState {
             msg_tx: tokio::sync::RwLock::new(None),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: None,
             workspace_pool: Some(Arc::new(pool)),
             multi_tenant_mode: true,

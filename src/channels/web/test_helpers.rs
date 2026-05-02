@@ -24,7 +24,7 @@ use crate::channels::IncomingMessage;
 use crate::channels::web::auth::MultiAuthState;
 use crate::channels::web::platform::router::start_server;
 use crate::channels::web::platform::state::{GatewayState, PerUserRateLimiter, RateLimiter};
-use crate::channels::web::sse::SseManager;
+use crate::channels::web::sse::EventBus;
 use crate::channels::web::ws::WsConnectionTracker;
 
 #[cfg(test)]
@@ -88,7 +88,7 @@ impl TestGatewayBuilder {
     pub fn build(self) -> Arc<GatewayState> {
         Arc::new(GatewayState {
             msg_tx: tokio::sync::RwLock::new(self.msg_tx),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: None,
             workspace_pool: None,
             multi_tenant_mode: false,
@@ -204,7 +204,7 @@ pub(crate) fn test_gateway_state_with_dependencies(
 ) -> Arc<GatewayState> {
     Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,
@@ -261,7 +261,7 @@ pub(crate) fn test_gateway_state_with_store_and_session_manager(
 ) -> Arc<GatewayState> {
     Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: false,

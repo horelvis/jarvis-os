@@ -226,7 +226,7 @@ pub struct AgentDeps {
     /// Cost enforcement guardrails (daily budget, hourly rate limits).
     pub cost_guard: Arc<crate::agent::cost_guard::CostGuard>,
     /// SSE manager for live job event streaming to the web gateway.
-    pub sse_tx: Option<Arc<crate::channels::web::sse::SseManager>>,
+    pub sse_tx: Option<Arc<crate::channels::web::sse::EventBus>>,
     /// HTTP interceptor for trace recording/replay.
     pub http_interceptor: Option<Arc<dyn crate::llm::recording::HttpInterceptor>>,
     /// Audio transcription middleware for voice messages.

@@ -52,7 +52,7 @@ pub struct WorkerDeps {
     pub timeout: Duration,
     pub use_planning: bool,
     /// Broadcast sender for live job event streaming to the web gateway.
-    pub sse_tx: Option<Arc<crate::channels::web::sse::SseManager>>,
+    pub sse_tx: Option<Arc<crate::channels::web::sse::EventBus>>,
     /// Approval context for tool execution. When `None`, all non-`Never` tools are
     /// blocked (legacy behavior). When `Some`, the context determines which tools
     /// are pre-approved for autonomous execution.

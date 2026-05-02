@@ -241,7 +241,7 @@ mod tests {
     use crate::channels::web::platform::state::{
         ActiveConfigSnapshot, GatewayState, PerUserRateLimiter, RateLimiter, WorkspacePool,
     };
-    use crate::channels::web::sse::SseManager;
+    use crate::channels::web::sse::EventBus;
     use crate::config::{WorkspaceConfig, WorkspaceSearchConfig};
     use crate::db::Database;
     use crate::workspace::{EmbeddingCacheConfig, Workspace};
@@ -267,7 +267,7 @@ mod tests {
     ) -> Arc<GatewayState> {
         Arc::new(GatewayState {
             msg_tx: tokio::sync::RwLock::new(None),
-            sse: Arc::new(SseManager::new()),
+            sse: Arc::new(EventBus::new()),
             workspace: Some(workspace),
             workspace_pool: Some(pool),
             multi_tenant_mode: false,

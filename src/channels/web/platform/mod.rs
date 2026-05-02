@@ -6,7 +6,7 @@
 //!
 //! **Dependency direction.** Feature handlers (under `handlers/` today,
 //! `features/<slice>/` later) depend on platform types (`GatewayState`,
-//! rate limiters, auth extractors, `SseManager`, `WsConnectionTracker`).
+//! rate limiters, auth extractors, `EventBus`, `WsConnectionTracker`).
 //! Platform *submodules* do **not** reach back into feature handlers —
 //! with the single, intentional exception of [`router`], which is the
 //! composition point. The router imports every feature handler it

@@ -25,7 +25,7 @@ use ironclaw::channels::web::auth::{
 };
 use ironclaw::channels::web::platform::router::start_server;
 use ironclaw::channels::web::platform::state::{GatewayState, PerUserRateLimiter, RateLimiter};
-use ironclaw::channels::web::sse::SseManager;
+use ironclaw::channels::web::sse::EventBus;
 use ironclaw::channels::web::test_helpers::TestGatewayBuilder;
 use ironclaw::channels::web::ws::WsConnectionTracker;
 use ironclaw::context::JobContext;
@@ -312,7 +312,7 @@ async fn sse_scoped_event_only_delivered_to_target_user() {
     use ironclaw_common::AppEvent;
     use tokio_stream::StreamExt;
 
-    let manager = SseManager::new();
+    let manager = EventBus::new();
     let mut alice_stream = Box::pin(
         manager
             .subscribe_raw(Some(ALICE_USER_ID.to_string()), false)
@@ -357,7 +357,7 @@ async fn sse_global_event_delivered_to_all_users() {
     use ironclaw_common::AppEvent;
     use tokio_stream::StreamExt;
 
-    let manager = SseManager::new();
+    let manager = EventBus::new();
     let mut alice = Box::pin(
         manager
             .subscribe_raw(Some(ALICE_USER_ID.to_string()), false)
@@ -390,7 +390,7 @@ async fn sse_user_b_event_not_visible_to_user_a() {
     use ironclaw_common::AppEvent;
     use tokio_stream::StreamExt;
 
-    let manager = SseManager::new();
+    let manager = EventBus::new();
     let mut alice = Box::pin(
         manager
             .subscribe_raw(Some(ALICE_USER_ID.to_string()), false)
@@ -423,7 +423,7 @@ async fn sse_unscoped_subscriber_receives_all_events() {
     use ironclaw_common::AppEvent;
     use tokio_stream::StreamExt;
 
-    let manager = SseManager::new();
+    let manager = EventBus::new();
     // Unscoped subscriber (None user_id) — backwards-compatible single-user mode
     let mut stream = Box::pin(manager.subscribe_raw(None, false).expect("subscribe"));
 
@@ -498,7 +498,7 @@ fn multi_auth_state_token_prefix_not_valid() {
 
 #[tokio::test]
 async fn sse_connection_count_tracks_scoped_subscribers() {
-    let manager = SseManager::new();
+    let manager = EventBus::new();
     assert_eq!(manager.connection_count(), 0);
 
     let _alice = Box::pin(
@@ -533,7 +533,7 @@ fn gateway_state_has_multi_tenant_fields() {
     // drop any fields.
     let state = GatewayState {
         msg_tx: tokio::sync::RwLock::new(None),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None, // Multi-tenant: per-user workspace pool
         multi_tenant_mode: true,
@@ -626,7 +626,7 @@ async fn start_owner_scoped_sender_server() -> (
 
     let state = Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(Some(agent_tx)),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: true,
@@ -1108,7 +1108,7 @@ async fn start_multi_user_server_with_db() -> (
     // Build state manually so we can inject the DB
     let state = Arc::new(GatewayState {
         msg_tx: tokio::sync::RwLock::new(Some(agent_tx)),
-        sse: Arc::new(SseManager::new()),
+        sse: Arc::new(EventBus::new()),
         workspace: None,
         workspace_pool: None,
         multi_tenant_mode: true,
