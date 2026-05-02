@@ -41,10 +41,10 @@ PanelWindow {
         id: stage
         anchors.centerIn: parent
         width: 600
-        // Height grew from 240 to 360 to fit the five-band circular
-        // waveform whose outermost ring reaches ~165 px radius from
-        // the core.
-        height: 360
+        // Stage is sized to fit the outermost decorative ring
+        // (ringLayers, 410 px diameter = 205 px radius) plus a margin
+        // for the HUD displays at the top corners.
+        height: 460
 
         // ─── Synthetic circular waveforms wrapping the core ───────────
         // Three concentric undulating rings — closed curves whose radius
@@ -80,6 +80,10 @@ PanelWindow {
                 // the voice daemon's per-band level data; in F3a the
                 // independent `speed` values already make every band
                 // move differently from the others.
+                // The five bands sit between the core and the outer
+                // decorative ringLayers (~205 px radius). Bass at 78,
+                // treble at 160 — leaves ~30 px of breathing room
+                // between the outermost band and the static rings.
                 var configs = [
                     { color: ring.colorAccent, width: 1.4, rBase: 78,  ampMul: 7,  n: 4,  speed: 0.4 },  // bass — amber
                     { color: ring.colorDeep,   width: 1.2, rBase: 100, ampMul: 7,  n: 6,  speed: 0.7 },  // low-mid — cyan deep
@@ -124,6 +128,117 @@ PanelWindow {
             }
         }
 
+        // ─── Static decorative ring layers wrapping the audio bands ───
+        // Three rings sitting *outside* the breathing audio bands so
+        // the orb reads as: core → audio bands (interior) → static
+        // instrumentation (exterior). Each ring has a distinct visual
+        // signature so the field reads as layered instrumentation,
+        // not a stack of identical arcs.
+        Item {
+            id: ringLayers
+            anchors.centerIn: parent
+            width: 410
+            height: 410
+
+            // Layer 1 — outermost ring, variable stroke thickness.
+            // Drawn as many tiny arc segments whose lineWidth is a
+            // function of the angle (and phase, so it breathes a
+            // little). Canvas is the only path here that lets stroke
+            // width vary mid-ring without doing per-segment Shapes.
+            Canvas {
+                id: variableRing
+                anchors.fill: parent
+                renderStrategy: Canvas.Threaded
+                property real phase: 0.0
+                onPaint: {
+                    var ctx = getContext("2d");
+                    ctx.reset();
+                    if (ring.offline) {
+                        return;
+                    }
+                    var cx = width / 2;
+                    var cy = height / 2;
+                    var r = width / 2 - 4;
+                    ctx.strokeStyle = ring.colorPrimary;
+                    ctx.lineCap = "round";
+                    var step = 4;            // 4° per segment
+                    var stepRad = step * Math.PI / 180;
+                    for (var deg = 0; deg < 360; deg += step) {
+                        var theta = deg * Math.PI / 180;
+                        // Three lobes of varying thickness, modulated
+                        // slowly by the phase so the ring breathes.
+                        var w = 0.6 + 2.6
+                              * Math.abs(Math.sin(theta * 1.5 + phase));
+                        ctx.lineWidth = w;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, theta, theta + stepRad);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Layer 2 — clock-face minute ticks. 60 marks at 6° each,
+            // every fifth one taller (the "5-minute" cardinals).
+            Item {
+                anchors.centerIn: parent
+                width: 380
+                height: 380
+                Repeater {
+                    model: 60
+                    Item {
+                        width: 380
+                        height: 380
+                        anchors.centerIn: parent
+                        rotation: index * 6
+                        Rectangle {
+                            width: 1
+                            height: index % 5 === 0 ? 10 : 4
+                            color: index % 5 === 0
+                                ? ring.colorPrimary
+                                : ring.colorDeep
+                            opacity: index % 5 === 0 ? 0.9 : 0.55
+                            anchors.top: parent.top
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+            }
+
+            // Layer 3 — innermost of the three decorative rings (still
+            // outside the audio bands), 270° arc only, amber. The 90°
+            // gap (between 45° and 135° in screen coordinates, i.e.
+            // opening upward-right) breaks the symmetry so the orb
+            // feels engineered, not stamped out.
+            Shape {
+                id: arcRing
+                anchors.centerIn: parent
+                width: 350
+                height: 350
+                ShapePath {
+                    strokeColor: ring.colorAccent
+                    strokeWidth: 2.2
+                    fillColor: "transparent"
+                    PathAngleArc {
+                        centerX: arcRing.width / 2
+                        centerY: arcRing.height / 2
+                        radiusX: arcRing.width / 2
+                        radiusY: arcRing.height / 2
+                        startAngle: 135
+                        sweepAngle: 270
+                    }
+                }
+            }
+        }
+        Timer {
+            interval: 50
+            running: !ring.offline
+            repeat: true
+            onTriggered: {
+                variableRing.phase += 0.06;
+                variableRing.requestPaint();
+            }
+        }
+
         // ─── Mecha core (center) ──────────────────────────────────────
         // Flat 2D — no radial gradient, no depth shading. The "mecha"
         // feel comes from layered solid shapes (hexagonal cage + tick
@@ -161,49 +276,6 @@ PanelWindow {
                 border.color: ring.colorPrimary
                 border.width: 0.8
                 opacity: 0.65
-            }
-
-            // Hexagonal segment overlay — six small hexagons placed
-            // around the inner ring. Counter-rotating cage gives the
-            // core its "mecha" look without 3D geometry.
-            Item {
-                id: hexCage
-                anchors.centerIn: parent
-                width: parent.width - 30
-                height: parent.height - 30
-                Repeater {
-                    model: 6
-                    Item {
-                        width: hexCage.width
-                        height: hexCage.height
-                        anchors.centerIn: parent
-                        rotation: index * 60
-                        Shape {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.top: parent.top
-                            width: 12
-                            height: 12
-                            ShapePath {
-                                strokeColor: ring.colorPrimary
-                                strokeWidth: 1
-                                fillColor: ring.colorDeep
-                                startX: 6; startY: 0
-                                PathLine { x: 12; y: 3 }
-                                PathLine { x: 12; y: 9 }
-                                PathLine { x: 6;  y: 12 }
-                                PathLine { x: 0;  y: 9 }
-                                PathLine { x: 0;  y: 3 }
-                                PathLine { x: 6;  y: 0 }
-                            }
-                        }
-                    }
-                }
-                RotationAnimation on rotation {
-                    from: 360; to: 0
-                    duration: ring.agentActive ? 9000 : 22000
-                    loops: Animation.Infinite
-                    running: !ring.offline
-                }
             }
 
             // Crosshair lines through the core (subtle alignment marks)
