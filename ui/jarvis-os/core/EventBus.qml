@@ -17,6 +17,12 @@ QtObject {
     property int tokenEstimate: 0
     property var recentEvents: []          // tail bounded to 50
 
+    // Real-time TTS audio levels (driven by AppEvent::AudioLevel from
+    // IronClaw's TtsAudioPipeline). The orb's audio bands subscribe to
+    // these properties; resets to silence when no events arrive.
+    property real audioLevel: 0.0          // RMS, normalised to [0, 1]
+    property var audioBands: [0.0, 0.0, 0.0, 0.0, 0.0]
+
     // Signals dispatched to widgets
     signal toolStarted(string name, string callId)
     signal toolCompleted(string name, string callId, bool success, int durationMs)
@@ -77,6 +83,15 @@ QtObject {
         }
         if (ev.type === "error") {
             console.warn("[EventBus] ipc error:", ev.kind, ev.detail);
+            return;
+        }
+        // High-rate audio frames bypass recentEvents — at ~30 fps they
+        // would saturate the bounded tail and drown out useful events.
+        // Update properties and return early so QML bindings on the
+        // orb fire without growing the log.
+        if (ev.type === "audio_level") {
+            if (typeof ev.rms === "number") bus.audioLevel = ev.rms;
+            if (Array.isArray(ev.bands)) bus.audioBands = ev.bands;
             return;
         }
 
