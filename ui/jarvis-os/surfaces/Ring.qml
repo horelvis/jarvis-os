@@ -237,7 +237,9 @@ PanelWindow {
                 // ─── Five overlapping audio bands (same radius) ──────
                 // All bands at the same rBase so they overlap; n /
                 // speed / color give each band its visual identity.
-                var bandRBase = coreR + 8;
+                // User asked for the band radius halved; previous
+                // value was coreR + 8.
+                var bandRBase = (coreR + 8) / 2;
                 var bandConfigs = [
                     { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },
                     { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7 },
