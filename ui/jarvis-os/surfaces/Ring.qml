@@ -32,85 +32,22 @@ PanelWindow {
 
     // ──────────────────────────────────────────────────────────────────
     // Composition root: a wide horizontal stage centered on the screen.
-    // The mecha core sits at the middle; sonar half-rings emanate to its
-    // left and right (radial waves spreading outward along the horizontal
-    // axis); a synthetic waveform crosses the entire stage. F3a uses
-    // synthetic data; F3b will swap the source for the voice daemon.
+    // The orb sits at the middle, with concentric rings (varied
+    // thickness, two of them rotating) wrapping the core. A synthetic
+    // waveform crosses the entire stage. F3a uses synthetic data; F3b
+    // will swap the source for the voice daemon.
     // ──────────────────────────────────────────────────────────────────
     Item {
         id: stage
         anchors.centerIn: parent
-        width: 760
-        height: 280
-
-        // ─── Sonar half-rings on the left side of the core ────────────
-        // Each ring is a half-ellipse (right side, opening toward the
-        // core). Stroke width and color cycle to give the field its
-        // varying "depth"; every 4th ring is amber as accent.
-        Repeater {
-            model: 7
-            delegate: Shape {
-                id: leftRing
-                required property int index
-                width: 70 + index * 18
-                height: 220 - index * 10
-                x: stage.width / 2 - 90 - index * 36 - width / 2
-                y: stage.height / 2 - height / 2
-                opacity: ring.offline
-                    ? 0.18
-                    : (ring.agentActive ? 0.85 : 0.55) * (1.0 - index * 0.09)
-                Behavior on opacity { NumberAnimation { duration: 300 } }
-                ShapePath {
-                    strokeColor: index % 4 === 3 ? ring.colorAccent : ring.colorPrimary
-                    strokeWidth: index % 4 === 3 ? 2.5 : (index % 2 === 0 ? 1.4 : 0.8)
-                    fillColor: "transparent"
-                    PathAngleArc {
-                        centerX: leftRing.width / 2
-                        centerY: leftRing.height / 2
-                        radiusX: leftRing.width / 2
-                        radiusY: leftRing.height / 2
-                        startAngle: 90
-                        sweepAngle: 180
-                    }
-                }
-            }
-        }
-
-        // ─── Sonar half-rings on the right side of the core ───────────
-        Repeater {
-            model: 7
-            delegate: Shape {
-                id: rightRing
-                required property int index
-                width: 70 + index * 18
-                height: 220 - index * 10
-                x: stage.width / 2 + 90 + index * 36 - width / 2
-                y: stage.height / 2 - height / 2
-                opacity: ring.offline
-                    ? 0.18
-                    : (ring.agentActive ? 0.85 : 0.55) * (1.0 - index * 0.09)
-                Behavior on opacity { NumberAnimation { duration: 300 } }
-                ShapePath {
-                    strokeColor: index % 4 === 3 ? ring.colorAccent : ring.colorPrimary
-                    strokeWidth: index % 4 === 3 ? 2.5 : (index % 2 === 0 ? 1.4 : 0.8)
-                    fillColor: "transparent"
-                    PathAngleArc {
-                        centerX: rightRing.width / 2
-                        centerY: rightRing.height / 2
-                        radiusX: rightRing.width / 2
-                        radiusY: rightRing.height / 2
-                        startAngle: 270
-                        sweepAngle: 180
-                    }
-                }
-            }
-        }
+        width: 600
+        height: 240
 
         // ─── Synthetic waveform crossing the stage horizontally ───────
         // Three superimposed sines at different frequencies and phases,
         // refreshed at ~30 fps. An envelope dips the amplitude near the
-        // core so the waveform looks like it's emerging *from* the core,
-        // not overlapping it. F3b swaps `phase`/`amplitude` for the
+        // core so the waveform looks like it's emerging *from* the
+        // core, not overlapping it. F3b swaps phase/amplitude for the
         // voice daemon's running level + dominant-band data.
         Canvas {
             id: waveform
@@ -130,9 +67,9 @@ PanelWindow {
                 var cy = h / 2;
                 var amp = waveform.amplitude;
                 var configs = [
-                    { color: ring.colorSoft,    width: 1.0, freq: 0.030, ampMul: 18, phase: phase * 1.7 },
-                    { color: ring.colorPrimary, width: 1.6, freq: 0.018, ampMul: 32, phase: phase * 1.0 },
-                    { color: ring.colorAccent,  width: 1.2, freq: 0.011, ampMul: 24, phase: phase * 0.6 + 1.2 }
+                    { color: ring.colorSoft,    width: 1.0, freq: 0.030, ampMul: 14, phase: phase * 1.7 },
+                    { color: ring.colorPrimary, width: 1.6, freq: 0.018, ampMul: 26, phase: phase * 1.0 },
+                    { color: ring.colorAccent,  width: 1.2, freq: 0.011, ampMul: 20, phase: phase * 0.6 + 1.2 }
                 ];
                 for (var c = 0; c < configs.length; c++) {
                     var cfg = configs[c];
@@ -142,7 +79,9 @@ PanelWindow {
                     ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.55 : 0.7) * amp;
                     for (var x = 0; x <= w; x += 2) {
                         var distFromCore = Math.abs(x - w / 2);
-                        var envelope = Math.min(1.0, distFromCore / 110);
+                        // Envelope dips around the core so the wave
+                        // doesn't overlap the orb.
+                        var envelope = Math.min(1.0, distFromCore / 130);
                         var y = cy + Math.sin(x * cfg.freq + cfg.phase)
                                        * cfg.ampMul * amp * envelope;
                         if (x === 0) ctx.moveTo(x, y);
@@ -163,101 +102,200 @@ PanelWindow {
             }
         }
 
+        // ─── Concentric rings wrapping the core ───────────────────────
+        // Eight rings of varying thickness around the central orb.
+        // Two of them (indices 0 and 5) rotate, giving life to the
+        // composition. Every 3rd ring is amber as accent. Stroke width
+        // alternates so the ring field has visual rhythm rather than a
+        // uniform comb-line look.
+        //
+        // The model array carries radius offset, stroke width, color
+        // selector, dash spec, and rotation flag per ring.
+        Item {
+            id: ringField
+            anchors.centerIn: parent
+            width: 320
+            height: 320
+
+            Repeater {
+                model: [
+                    { r: 0,   w: 1.0,  c: 0, dash: false, rotate: true,  rotMs: 18000 },
+                    { r: 14,  w: 0.5,  c: 0, dash: false, rotate: false, rotMs: 0 },
+                    { r: 22,  w: 1.8,  c: 0, dash: false, rotate: false, rotMs: 0 },
+                    { r: 36,  w: 0.5,  c: 1, dash: false, rotate: false, rotMs: 0 },
+                    { r: 44,  w: 1.0,  c: 0, dash: false, rotate: false, rotMs: 0 },
+                    { r: 58,  w: 2.5,  c: 2, dash: false, rotate: true,  rotMs: 11000 },
+                    { r: 72,  w: 0.5,  c: 0, dash: false, rotate: false, rotMs: 0 },
+                    { r: 84,  w: 1.4,  c: 1, dash: true,  rotate: false, rotMs: 0 }
+                ]
+                delegate: Item {
+                    id: concentricRing
+                    required property var modelData
+                    required property int index
+                    anchors.centerIn: parent
+                    width: 140 + modelData.r * 2
+                    height: 140 + modelData.r * 2
+
+                    rotation: 0
+                    RotationAnimation on rotation {
+                        running: modelData.rotate && !ring.offline
+                        from: 0; to: 360
+                        duration: ring.agentActive
+                            ? modelData.rotMs / 2.5
+                            : modelData.rotMs
+                        loops: Animation.Infinite
+                    }
+
+                    Shape {
+                        anchors.fill: parent
+                        ShapePath {
+                            strokeColor: modelData.c === 2
+                                ? ring.colorAccent
+                                : (modelData.c === 1
+                                    ? ring.colorDeep
+                                    : ring.colorPrimary)
+                            strokeWidth: modelData.w
+                            fillColor: "transparent"
+                            strokeStyle: modelData.dash
+                                ? ShapePath.DashLine
+                                : ShapePath.SolidLine
+                            dashPattern: [3, 4]
+                            PathAngleArc {
+                                centerX: concentricRing.width / 2
+                                centerY: concentricRing.height / 2
+                                radiusX: concentricRing.width / 2
+                                radiusY: concentricRing.height / 2
+                                startAngle: 0
+                                sweepAngle: 360
+                            }
+                        }
+                    }
+
+                    // Cardinal tick marks on the outermost solid ring
+                    Repeater {
+                        model: modelData.r === 22 ? 12 : 0
+                        Item {
+                            width: concentricRing.width
+                            height: concentricRing.height
+                            anchors.centerIn: parent
+                            rotation: index * 30
+                            Rectangle {
+                                width: 1
+                                height: index % 3 === 0 ? 8 : 4
+                                color: ring.colorPrimary
+                                opacity: index % 3 === 0 ? 0.95 : 0.55
+                                anchors.top: parent.top
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                        }
+                    }
+
+                    // Cardinal letters N/E/S/W just inside the second
+                    // ring, kept upright via counter-rotation.
+                    Repeater {
+                        model: modelData.r === 22
+                            ? [
+                                { label: "N", angle: 0   },
+                                { label: "E", angle: 90  },
+                                { label: "S", angle: 180 },
+                                { label: "W", angle: 270 }
+                              ]
+                            : []
+                        Item {
+                            width: concentricRing.width
+                            height: concentricRing.height
+                            anchors.centerIn: parent
+                            rotation: modelData.angle
+                            Text {
+                                text: modelData.label
+                                color: ring.colorPrimary
+                                opacity: 0.6
+                                font.family: "monospace"
+                                font.pixelSize: 7
+                                font.letterSpacing: 1
+                                anchors.top: parent.top
+                                anchors.topMargin: 12
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                rotation: -modelData.angle
+                            }
+                        }
+                    }
+
+                    // Slash dashes on the rotating mid ring (r=58).
+                    // Four short bars at 0/90/180/270 degrees that
+                    // travel with the rotation animation, giving the
+                    // ring a "scanner" feel.
+                    Repeater {
+                        model: modelData.r === 58 ? 4 : 0
+                        Item {
+                            width: concentricRing.width
+                            height: concentricRing.height
+                            anchors.centerIn: parent
+                            rotation: index * 90
+                            Rectangle {
+                                width: 14
+                                height: 2
+                                color: index % 2 === 0
+                                    ? ring.colorPrimary
+                                    : ring.colorAccent
+                                opacity: ring.offline ? 0.3 : 0.9
+                                anchors.top: parent.top
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.topMargin: -1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ─── Mecha core (center) ──────────────────────────────────────
+        // Flat 2D — no radial gradient, no depth shading. The "mecha"
+        // feel comes from layered solid shapes (hexagonal cage + tick
+        // marks + cross hairs) over a flat fill, not from 3D illusions.
         Item {
             id: core
             anchors.centerIn: parent
-            width: 160
-            height: 160
+            width: 110
+            height: 110
 
-            // Glow halo
+            // Solid flat fill — the deep cyan disc that anchors the orb.
             Rectangle {
-                anchors.centerIn: parent
-                width: parent.width + 22
-                height: parent.height + 22
+                anchors.fill: parent
                 radius: width / 2
-                color: "transparent"
-                border.color: ring.colorPrimary
-                border.width: 1
-                opacity: ring.agentActive ? 0.55 : 0.25
-                Behavior on opacity { NumberAnimation { duration: 250 } }
+                color: ring.colorDeep
+                opacity: 0.35
             }
 
-            // Outer ring — solid
+            // Outer ring border
             Rectangle {
                 anchors.fill: parent
                 radius: width / 2
                 color: "transparent"
                 border.color: ring.colorPrimary
-                border.width: 2
+                border.width: 1.5
             }
 
-            // Outer ring tick marks (12 cardinals + intercardinals)
-            Repeater {
-                model: 12
-                Item {
-                    width: core.width
-                    height: core.height
-                    anchors.centerIn: parent
-                    rotation: index * 30
-                    Rectangle {
-                        width: 1
-                        height: index % 3 === 0 ? 9 : 5
-                        color: ring.colorPrimary
-                        opacity: index % 3 === 0 ? 0.95 : 0.55
-                        anchors.top: parent.top
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                }
-            }
-
-            // Mid ring with rotating dashes (replaces the old 4-arc)
-            Item {
+            // Inner secondary ring
+            Rectangle {
                 anchors.centerIn: parent
-                width: parent.width - 28
-                height: parent.height - 28
-                Rectangle {
-                    anchors.fill: parent
-                    radius: width / 2
-                    color: "transparent"
-                    border.color: ring.colorDeep
-                    border.width: 1
-                    opacity: ring.offline ? 0.3 : 0.7
-                }
-                Repeater {
-                    model: 8
-                    Item {
-                        width: parent.width
-                        height: parent.height
-                        anchors.centerIn: parent
-                        rotation: index * 45
-                        Rectangle {
-                            width: 12
-                            height: 2
-                            color: index % 2 === 0 ? ring.colorPrimary : ring.colorAccent
-                            opacity: ring.offline ? 0.25 : 0.85
-                            anchors.top: parent.top
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.topMargin: -1
-                        }
-                    }
-                }
-                RotationAnimation on rotation {
-                    from: 0; to: 360
-                    duration: ring.agentActive ? 4500 : 14000
-                    loops: Animation.Infinite
-                    running: !ring.offline
-                }
+                width: parent.width - 18
+                height: parent.height - 18
+                radius: width / 2
+                color: "transparent"
+                border.color: ring.colorPrimary
+                border.width: 0.8
+                opacity: 0.65
             }
 
             // Hexagonal segment overlay — six small hexagons placed
-            // around the inner ring. This is what gives the core its
-            // "mecha" feel without doing 3D geometry.
+            // around the inner ring. Counter-rotating cage gives the
+            // core its "mecha" look without 3D geometry.
             Item {
                 id: hexCage
                 anchors.centerIn: parent
-                width: core.width - 60
-                height: core.height - 60
+                width: parent.width - 30
+                height: parent.height - 30
                 Repeater {
                     model: 6
                     Item {
@@ -268,21 +306,19 @@ PanelWindow {
                         Shape {
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.top: parent.top
-                            width: 14
-                            height: 14
+                            width: 12
+                            height: 12
                             ShapePath {
                                 strokeColor: ring.colorPrimary
                                 strokeWidth: 1
-                                fillColor: ring.agentActive
-                                    ? Qt.rgba(0.36, 0.79, 1, 0.18)
-                                    : Qt.rgba(0.36, 0.79, 1, 0.06)
-                                startX: 7; startY: 0
-                                PathLine { x: 14; y: 4 }
-                                PathLine { x: 14; y: 10 }
-                                PathLine { x: 7; y: 14 }
-                                PathLine { x: 0; y: 10 }
-                                PathLine { x: 0; y: 4 }
-                                PathLine { x: 7; y: 0 }
+                                fillColor: ring.colorDeep
+                                startX: 6; startY: 0
+                                PathLine { x: 12; y: 3 }
+                                PathLine { x: 12; y: 9 }
+                                PathLine { x: 6;  y: 12 }
+                                PathLine { x: 0;  y: 9 }
+                                PathLine { x: 0;  y: 3 }
+                                PathLine { x: 6;  y: 0 }
                             }
                         }
                     }
@@ -295,71 +331,41 @@ PanelWindow {
                 }
             }
 
-            // Inner ring — pulse-scaled when active
-            Rectangle {
-                id: innerRing
-                anchors.centerIn: parent
-                width: 56
-                height: 56
-                radius: width / 2
-                color: "transparent"
-                border.color: ring.colorPrimary
-                border.width: 1.5
-                opacity: 0.85
-                SequentialAnimation on scale {
-                    running: ring.agentActive
-                    loops: Animation.Infinite
-                    NumberAnimation { from: 1.0; to: 1.12; duration: 700 }
-                    NumberAnimation { from: 1.12; to: 1.0; duration: 700 }
-                }
-            }
-
-            // Core fill — gradient circle suggesting depth without 3D
+            // Crosshair lines through the core (subtle alignment marks)
             Rectangle {
                 anchors.centerIn: parent
-                width: 46
-                height: 46
-                radius: width / 2
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: ring.colorSoft }
-                    GradientStop { position: 0.55; color: ring.colorPrimary }
-                    GradientStop { position: 1.0; color: ring.colorDeep }
-                }
-                opacity: 0.95
-            }
-
-            // Crosshairs through the core (subtle)
-            Rectangle {
-                anchors.centerIn: parent
-                width: core.width - 40
+                width: core.width - 24
                 height: 1
                 color: ring.colorDeep
-                opacity: 0.25
+                opacity: 0.4
             }
             Rectangle {
                 anchors.centerIn: parent
                 width: 1
-                height: core.height - 40
+                height: core.height - 24
                 color: ring.colorDeep
-                opacity: 0.25
+                opacity: 0.4
             }
 
-            // Center label
-            Text {
+            // Center dot — flat, no gradient. Pulse-scaled when active.
+            Rectangle {
+                id: centerDot
                 anchors.centerIn: parent
-                text: "JARVIS"
-                color: ring.offline ? "#150c02" : "#02060e"
-                font.family: "monospace"
-                font.pixelSize: 8
-                font.bold: true
-                font.letterSpacing: 1.5
+                width: 14
+                height: 14
+                radius: width / 2
+                color: ring.colorPrimary
+                opacity: ring.offline ? 0.5 : 0.95
+                SequentialAnimation on scale {
+                    running: ring.agentActive
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 1.0; to: 1.4; duration: 600 }
+                    NumberAnimation { from: 1.4; to: 1.0; duration: 600 }
+                }
             }
         }
 
         // ─── HUD mini displays at the top corners ─────────────────────
-        // Decorative; matches the SVG mockup language. Synthetic
-        // numbers in F3a — F3b plugs the voice daemon's running level
-        // and dominant-band frequency.
         Column {
             anchors.top: parent.top
             anchors.left: parent.left
@@ -406,7 +412,7 @@ PanelWindow {
         // ─── Status text directly under the core ──────────────────────
         Text {
             anchors.top: core.bottom
-            anchors.topMargin: 18
+            anchors.topMargin: 110
             anchors.horizontalCenter: core.horizontalCenter
             color: ring.colorPrimary
             font.family: "monospace"
