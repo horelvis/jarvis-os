@@ -253,11 +253,26 @@ PanelWindow {
                     ctx.restore();
                 }
 
-                // ─── ANILLO 2: inner clock-hand field ─────────────────
-                // 60 uniform ticks at innerR + 18, length 5, line 1 px.
-                // Rotates with `orb.spin`. With the old A2 inner ring
-                // gone, the ticks now sit alone above the audio bands.
-                ticks(innerR + 18, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
+                // ─── ANILLO 2: two-layer ring (A2A + A2B) ─────────────
+                // Two superimposed strokes at the same radius, applying
+                // the layered-strokes design rule (see
+                // feedback_layered_strokes_for_thickness memory).
+                //
+                //   A2A — wide translucent base. Width 8 px, alpha 0.32.
+                //         shadowBlur=8 in cyanSoft for ambient halo.
+                //   A2B — bright hairline highlight. Width 1.5 px,
+                //         alpha 0.95, no extra blur (the base already
+                //         carries the glow).
+                //
+                // Both at innerR + 18 — the same radius the previous
+                // 60-tick clock-hand field used to anchor on. The pair
+                // reads as a single "double-line" ring with depth.
+                ctx.save();
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = ring.colorSoft;
+                circle(innerR + 18, 8,   ring.colorSoft,    0.32);   // A2A
+                ctx.restore();
+                circle(innerR + 18, 1.5, ring.colorPrimary, 0.95);   // A2B
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
