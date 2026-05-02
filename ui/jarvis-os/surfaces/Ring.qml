@@ -256,28 +256,31 @@ PanelWindow {
                 }
 
                 // ─── ANILLO 2: two-layer ring (A2A + A2B) ─────────────
-                // Two superimposed strokes at the same radius, applying
-                // the layered-strokes design rule (see
+                // Two strokes that share color and alpha but differ in
+                // width and radius so their *outer edges align* — the
+                // layered-strokes design rule (see
                 // feedback_layered_strokes_for_thickness memory).
                 //
-                //   A2A — wide translucent base, **220° arc only**.
-                //         Width 8 px, alpha 0.32, shadowBlur=8 in
-                //         cyanSoft. Gap is centered at 12 o'clock
-                //         (70°..290° clockwise → 140° gap on top).
-                //   A2B — bright hairline highlight, full circle.
-                //         Width 1.5 px, alpha 0.95, no extra blur.
+                //   A2A — wide base, **220° arc only**.
+                //         Center a2R, width 8 → outer edge a2R + 4.
+                //         Gap centered at 12 o'clock (70°..290°).
+                //   A2B — hairline, full circle.
+                //         Center a2R + 3.25, width 1.5 → outer edge
+                //         a2R + 4 (matches A2A's outer edge).
                 //
-                // Radius halved to 44 px (was innerR + 18 = 88) — the
-                // previous radius collided with ANILLO 3's middle
-                // ring (midR ≈ 89). Now A2 sits well inside, between
-                // the audio bands (rBase ≈ 28) and the middle stack.
+                // Both at colorPrimary, alpha 0.85. shadowBlur=8 on
+                // A2A only (the base carries the halo; A2B reads as a
+                // hard highlight on top).
+                //
+                // a2R = 44 (was innerR + 18 = 88 — halved to clear
+                // ANILLO 3's middle ring at midR ≈ 89).
                 var a2R = (innerR + 18) / 2;
                 ctx.save();
                 ctx.shadowBlur = 8;
-                ctx.shadowColor = ring.colorSoft;
-                arc(a2R, 70, 290, 8, ring.colorSoft, 0.32);   // A2A
+                ctx.shadowColor = ring.colorPrimary;
+                arc(a2R, 70, 290, 8, ring.colorPrimary, 0.85);   // A2A
                 ctx.restore();
-                circle(a2R, 1.5, ring.colorPrimary, 0.95);    // A2B
+                circle(a2R + 3.25, 1.5, ring.colorPrimary, 0.85); // A2B
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
