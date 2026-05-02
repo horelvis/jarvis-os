@@ -265,16 +265,17 @@ PanelWindow {
                 //   A2B — bright hairline highlight, full circle.
                 //         Width 1.5 px, alpha 0.95, no extra blur.
                 //
-                // Both at innerR + 18. A2B remains continuous so the
-                // ring still reads as closed; A2A's 220° arc creates
-                // the layered "double-width" effect only on the lower
-                // ¾ of the ring.
+                // Radius halved to 44 px (was innerR + 18 = 88) — the
+                // previous radius collided with ANILLO 3's middle
+                // ring (midR ≈ 89). Now A2 sits well inside, between
+                // the audio bands (rBase ≈ 28) and the middle stack.
+                var a2R = (innerR + 18) / 2;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorSoft;
-                arc(innerR + 18, 70, 290, 8, ring.colorSoft, 0.32);   // A2A
+                arc(a2R, 70, 290, 8, ring.colorSoft, 0.32);   // A2A
                 ctx.restore();
-                circle(innerR + 18, 1.5, ring.colorPrimary, 0.95);    // A2B
+                circle(a2R, 1.5, ring.colorPrimary, 0.95);    // A2B
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
