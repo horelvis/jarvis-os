@@ -155,7 +155,7 @@ PanelWindow {
                 //   ANILLO 2  Two-layer ring (A2A 220° arc + A2B circle)
                 //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
                 //   ANILLO 4  Two-layer ring (A4A 220° arc + A4B circle)
-                //   ANILLO 5  Two-layer ring (A5A 220° arc + A5B circle)
+                //   ANILLO 5  Clock-hand field — mirrors A3 (60 ticks, rotates)
                 //   ANILLO 6  Outermost frame ring (thick uniform)
                 //   [deco a]  Status dots — DISABLED (commented out)
                 //   [deco b]  Progress accent — DISABLED (commented out)
@@ -190,22 +190,13 @@ PanelWindow {
                 // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — two-layer ring (A5A + A5B), same A2 pattern.
-                //   A5A — wide base, 220° arc only (gap centered at
-                //         12 o'clock). Center outerR + 3.5, width 15
-                //         → outer edge outerR + 11.
-                //   A5B — bright hairline, full circle. Center
-                //         outerR + 10.25, width 1.5 → outer edge
-                //         outerR + 11 (matches A5A's outer edge).
-                //   Both at colorPrimary, alpha 0.85, shadowBlur=8 on
-                //   A5A only (carries the halo).
-                var a5R = outerR + 3.5;
-                ctx.save();
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = ring.colorPrimary;
-                arc(a5R, 70, 290, 15, ring.colorPrimary, 0.85);   // A5A
-                ctx.restore();
-                circle(a5R + 6.75, 1.5, ring.colorPrimary, 0.85); // A5B
+                // ANILLO 5 — clock-hand field (mirrors ANILLO 3).
+                //   60 uniform ticks at radius outerR + 11, length 5,
+                //   line 1 px, colorPrimary alpha 0.85, rotating with
+                //   orb.spin. Same parameters as A3 except for the
+                //   radius — it's a second tick field on the outer
+                //   edge of the orb, mirroring the inner one.
+                ticks(outerR + 11, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
                 // ANILLO 6 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
