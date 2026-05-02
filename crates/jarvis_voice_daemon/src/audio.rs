@@ -10,7 +10,7 @@
 //! evento `interruption`.
 
 use anyhow::{Context, Result, anyhow};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use ringbuf::{
     HeapRb,
     traits::{Consumer, Observer, Producer, Split},

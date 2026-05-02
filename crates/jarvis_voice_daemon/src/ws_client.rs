@@ -3,19 +3,16 @@
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 use crate::config::Config;
 use crate::protocol::{
     ClientToolResult, ConversationInitiation, Pong, ServerMessage, UserAudioChunk,
 };
-
-pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 const ENDPOINT: &str = "wss://api.elevenlabs.io/v1/convai/conversation";
 const HEADER_API_KEY: &str = "xi-api-key";
