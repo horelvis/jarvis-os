@@ -7,6 +7,7 @@
 //! este daemon es el cabledo de audio entre el hardware local y la API.
 
 mod audio;
+mod audio_analysis;
 mod config;
 mod orchestrator;
 mod protocol;
