@@ -210,23 +210,22 @@ PanelWindow {
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
                 // ─── ANILLO 4: two-layer ring (A4A + A4B), opposite of A2.
-                //   A4A — wide base, 220° arc with gap at 6 o'clock
+                //   A4A — wide base, **280° arc** with gap at 6 o'clock
                 //         (the inverse of A2A, whose gap is at 12).
-                //         Sweep 250°..470° (= 110° wrapping past 0°)
-                //         covers the top arc, leaving the bottom open.
+                //         Sweep 220°..500° (wraps past 0°) covers the
+                //         top arc, leaving an 80° gap at the bottom.
                 //         Center midR, width 16 → inner edge midR-8,
                 //         outer edge midR+8.
-                //   A4B — bright hairline, full circle. INTERIOR edges
-                //         align (not exterior, as in A2). Center
-                //         midR-7.25, width 1.5 → inner edge midR-8
-                //         (matches A4A's inner edge).
-                //   Both at colorPrimary, alpha 0.85, shadowBlur=8 on
-                //   A4A only.
+                //   A4B — bright hairline, full circle. Interior edges
+                //         align (matches A2 after both were inverted).
+                //         Center midR-7.25, width 1.5 → inner edge
+                //         midR-8.
+                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A4A.
                 var a4R = midR;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(a4R, 250, 470, 16, ring.colorPrimary, 0.85);   // A4A
+                arc(a4R, 220, 500, 16, ring.colorPrimary, 0.85);   // A4A
                 ctx.restore();
                 circle(a4R - 7.25, 1.5, ring.colorPrimary, 0.85);  // A4B
 
@@ -275,31 +274,26 @@ PanelWindow {
                 ticks(65, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
                 // ─── ANILLO 2: two-layer ring (A2A + A2B) ─────────────
-                // Two strokes that share color and alpha but differ in
-                // width and radius so their *outer edges align* — the
-                // layered-strokes design rule (see
-                // feedback_layered_strokes_for_thickness memory).
+                // Two strokes sharing color and alpha; widths differ
+                // so their *interior edges align* — matches A4's
+                // alignment after the user inverted both rings.
                 //
-                //   A2A — wide base, **220° arc only**.
-                //         Center a2R, width 8 → outer edge a2R + 4.
+                //   A2A — wide base, 220° arc only.
+                //         Center a2R, width 8 → inner edge a2R - 4.
                 //         Gap centered at 12 o'clock (70°..290°).
                 //   A2B — hairline, full circle.
-                //         Center a2R + 3.25, width 1.5 → outer edge
-                //         a2R + 4 (matches A2A's outer edge).
+                //         Center a2R - 3.25, width 1.5 → inner edge
+                //         a2R - 4 (matches A2A's inner edge).
                 //
-                // Both at colorPrimary, alpha 0.85. shadowBlur=8 on
-                // A2A only (the base carries the halo; A2B reads as a
-                // hard highlight on top).
-                //
-                // a2R = 44 (was innerR + 18 = 88 — halved to clear
-                // ANILLO 4's middle ring at midR ≈ 89).
+                // Both at colorPrimary, α=0.85. shadowBlur=8 on A2A
+                // only.
                 var a2R = (innerR + 18) / 2;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
                 arc(a2R, 70, 290, 8, ring.colorPrimary, 0.85);   // A2A
                 ctx.restore();
-                circle(a2R + 3.25, 1.5, ring.colorPrimary, 0.85); // A2B
+                circle(a2R - 3.25, 1.5, ring.colorPrimary, 0.85); // A2B
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
