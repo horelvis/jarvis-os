@@ -293,22 +293,22 @@ PanelWindow {
                 // the band radius again ("reducir radio de A1"); line
                 // width bumped 1.2 → 2.5 ("añadir más grosor") so the
                 // strokes are visible on the smaller circumference.
-                // The innermost layer. Five closed undulating curves
-                // at the SAME radius (no staircase): each band is
-                //   r(θ,t) = bandRBase + ampMul · audioAmp · sin(n·θ + ω·t)
-                // so they overlap continuously, never drawing the same
-                // shape. Bands differ by n (petal count) / ω (phase
-                // speed) / color, simulating bass / low-mid / mid /
-                // high-mid / treble. F3a uses synthetic phases; F3b
-                // will swap them for the voice daemon's per-band level
-                // data so the bands react to actual audio.
+                // Five closed undulating curves with a small radial
+                // staircase (rOffset 0/2/4/6/8) so the bands separate
+                // a bit instead of fully overlapping. Each band is
+                //   r(θ,t) = bandRBase + rOffset
+                //          + ampMul · audioAmp · sin(n·θ + ω·t)
+                // Bands differ by n (petal count) / ω (phase speed) /
+                // color, simulating bass / low-mid / mid / high-mid /
+                // treble. F3a uses synthetic phases; F3b will swap them
+                // for the voice daemon's per-band level data.
                 var bandRBase = 30;
                 var bandConfigs = [
-                    { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },
-                    { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7 },
-                    { color: ring.colorPrimary, ampMul: 6,  n: 8,  speed: 1.0 },
-                    { color: ring.colorSoft,    ampMul: 4,  n: 11, speed: 1.3 },
-                    { color: "#f7d59b",         ampMul: 3,  n: 14, speed: 1.7 }
+                    { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4, rOffset: 0 },  // bass
+                    { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7, rOffset: 2 },  // low-mid
+                    { color: ring.colorPrimary, ampMul: 6,  n: 8,  speed: 1.0, rOffset: 4 },  // mid
+                    { color: ring.colorSoft,    ampMul: 4,  n: 11, speed: 1.3, rOffset: 6 },  // high-mid
+                    { color: "#f7d59b",         ampMul: 3,  n: 14, speed: 1.7, rOffset: 8 }   // treble
                 ];
                 var t = orb.phase;
                 var amp = orb.audioAmp;
@@ -322,7 +322,7 @@ PanelWindow {
                     var first = true;
                     for (var bdeg = 0; bdeg <= 360; bdeg += 1) {
                         var btheta = bdeg * Math.PI / 180;
-                        var br = bandRBase
+                        var br = bandRBase + cfg.rOffset
                                  + cfg.ampMul * amp
                                    * Math.sin(cfg.n * btheta + t * cfg.speed);
                         var bx = cx + br * Math.cos(btheta);
