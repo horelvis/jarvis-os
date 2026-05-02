@@ -185,16 +185,18 @@ PanelWindow {
                 // ─── ANILLO 4 + 5: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 4 — outer ticks at outerR + 11.
-                //   • 64 ticks, length 15 (40% longer than the
-                //     previous 11), line 1.6 px, rotating at
-                //     orb.spin / 2.
-                //   • Outer edge at outerR + 11; inner edge at
-                //     outerR - 4. The longer ticks now reach a bit
-                //     past where the deleted outer ring used to live.
-                //   • Outer edge sits 14.5 px inside the inner edge
-                //     of ANILLO 5 (outerR + 25.5).
-                ticks(outerR + 11, 64, 15, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
+                // ANILLO 4 — single continuous ring at outerR + 3.5.
+                //   • Replaced the previous 64-tick field with a single
+                //     thick ring that spans the same radial range
+                //     (outerR - 4 to outerR + 11), so visually the slot
+                //     is the same but read as one element instead of
+                //     many.
+                //   • Width 15 px (matches the old tick length).
+                //   • Alpha 0.7 (same as the ticks had).
+                //   • Static — a continuous ring has no visible
+                //     rotation, so the previous orb.spin/2 motion is
+                //     dropped.
+                circle(outerR + 3.5, 15, ring.colorSoft, 0.7);
 
                 // ANILLO 5 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
