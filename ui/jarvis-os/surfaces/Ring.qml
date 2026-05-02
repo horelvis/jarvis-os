@@ -154,11 +154,11 @@ PanelWindow {
                 //   ANILLO 1  Five overlapping audio bands (FFT bands)
                 //   ANILLO 2  Two-layer ring (A2A 220° arc + A2B circle)
                 //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
-                //   [deco a]  Status dots (4 amber points, top-right)
-                //   [deco b]  Progress accent (amber arc, tool load)
-                //   ANILLO 4  Middle ring (20-segment + thick 270° arc)
-                //   ANILLO 5  Outer ring (single continuous, was 64 ticks)
+                //   ANILLO 4  Two-layer ring (A4A 220° arc + A4B circle)
+                //   ANILLO 5  Two-layer ring (A5A 220° arc + A5B circle)
                 //   ANILLO 6  Outermost frame ring (thick uniform)
+                //   [deco a]  Status dots — DISABLED (commented out)
+                //   [deco b]  Progress accent — DISABLED (commented out)
                 //
                 // History (current state):
                 //  • Original outer ring at outerR (glow + 8-segment) was
@@ -190,18 +190,22 @@ PanelWindow {
                 // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — single continuous ring at outerR + 3.5.
-                //   • Replaced the previous 64-tick field with a single
-                //     thick ring that spans the same radial range
-                //     (outerR - 4 to outerR + 11), so visually the slot
-                //     is the same but read as one element instead of
-                //     many.
-                //   • Width 15 px (matches the old tick length).
-                //   • Alpha 0.7 (same as the ticks had).
-                //   • Static — a continuous ring has no visible
-                //     rotation, so the previous orb.spin/2 motion is
-                //     dropped.
-                circle(outerR + 3.5, 15, ring.colorSoft, 0.7);
+                // ANILLO 5 — two-layer ring (A5A + A5B), same A2 pattern.
+                //   A5A — wide base, 220° arc only (gap centered at
+                //         12 o'clock). Center outerR + 3.5, width 15
+                //         → outer edge outerR + 11.
+                //   A5B — bright hairline, full circle. Center
+                //         outerR + 10.25, width 1.5 → outer edge
+                //         outerR + 11 (matches A5A's outer edge).
+                //   Both at colorPrimary, alpha 0.85, shadowBlur=8 on
+                //   A5A only (carries the halo).
+                var a5R = outerR + 3.5;
+                ctx.save();
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = ring.colorPrimary;
+                arc(a5R, 70, 290, 15, ring.colorPrimary, 0.85);   // A5A
+                ctx.restore();
+                circle(a5R + 6.75, 1.5, ring.colorPrimary, 0.85); // A5B
 
                 // ANILLO 6 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
@@ -212,53 +216,61 @@ PanelWindow {
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
-                // ─── ANILLO 4: middle ring stack ──────────────────────
-                //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
-                //     stroke, counter-rotates at -spin*0.7.
-                //   • Faint full circle at midR for visual continuity
-                //     when the segmented gaps line up.
-                //   • Thick 270° arc at midR + 8 with the gap centered
-                //     at 12 o'clock (clock degrees 45..315). Static.
-                segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
-                              1.0, -orb.spin * 0.7);
-                circle(midR, 1.5, "rgba(120,220,255,0.35)", 0.85);
+                // ─── ANILLO 4: two-layer ring (A4A + A4B), same A2 pattern.
+                //   A4A — wide base, 220° arc only (gap centered at
+                //         12 o'clock). Center midR, width 8 → outer
+                //         edge midR + 4.
+                //   A4B — bright hairline, full circle. Center
+                //         midR + 3.25, width 1.5 → outer edge midR + 4
+                //         (matches A4A's outer edge).
+                //   Both at colorPrimary, alpha 0.85, shadowBlur=8 on
+                //   A4A only.
+                //
+                // (The previous middle stack — segmentedRing 20 segs,
+                // helper circle, thick 270° arc — was replaced at user
+                // request to unify A4 with the A2 design language.)
+                var a4R = midR;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(midR + 8, 45, 315, 4, ring.colorPrimary, 0.95);
+                arc(a4R, 70, 290, 8, ring.colorPrimary, 0.85);   // A4A
                 ctx.restore();
+                circle(a4R + 3.25, 1.5, ring.colorPrimary, 0.85); // A4B
 
-                // ─── [deco b] Progress accent (amber arc, tool load) ──
-                // Lives on the middle ring (midR - 6). Length scales
-                // 0..120° with `ring.toolLoad`; saturates at 3 active
-                // tools. End caps drawn as short fat arcs so the
-                // accent reads as engineered, not stamped.
-                if (ring.toolLoad > 0.001) {
-                    var progStart = 230;
-                    var progEnd = progStart + ring.toolLoad * 120;
-                    arc(midR - 6, progStart, progEnd, 8, ring.colorAccent, 1.0);
-                    arc(midR - 6, progStart - 12, progStart + 4, 10,
-                        ring.colorAccent, 0.9);
-                    arc(midR - 6, progEnd - 4, progEnd + 12, 10,
-                        ring.colorAccent, 0.9);
-                }
-
-                // ─── [deco a] Status dots (4 amber points) ────────────
-                // Sit just inside the middle ring (midR - 2), top-right
-                // arc (clock degrees 332 + d·11, d=0..3). shadowBlur=8.
-                for (var d = 0; d < 4; ++d) {
-                    var da = degToRad(332 + d * 11);
-                    var dx = Math.cos(da) * (midR - 2);
-                    var dy = Math.sin(da) * (midR - 2);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.fillStyle = ring.colorDot;
-                    ctx.shadowBlur = 8;
-                    ctx.shadowColor = ring.colorDot;
-                    ctx.arc(cx + dx, cy + dy, 3.4, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                }
+                // ─── [deco a + deco b] DISABLED ───────────────────────
+                // User: "no logro identificarlos" — the status dots and
+                // the progress accent were not visually distinguishable
+                // in context, so both blocks are commented out below.
+                // Re-enable by uncommenting; the code is otherwise
+                // intact.
+                //
+                // [deco b] — progress accent (amber arc, tool load):
+                //
+                // if (ring.toolLoad > 0.001) {
+                //     var progStart = 230;
+                //     var progEnd = progStart + ring.toolLoad * 120;
+                //     arc(midR - 6, progStart, progEnd, 8, ring.colorAccent, 1.0);
+                //     arc(midR - 6, progStart - 12, progStart + 4, 10,
+                //         ring.colorAccent, 0.9);
+                //     arc(midR - 6, progEnd - 4, progEnd + 12, 10,
+                //         ring.colorAccent, 0.9);
+                // }
+                //
+                // [deco a] — 4 amber status dots, top-right arc:
+                //
+                // for (var d = 0; d < 4; ++d) {
+                //     var da = degToRad(332 + d * 11);
+                //     var dx = Math.cos(da) * (midR - 2);
+                //     var dy = Math.sin(da) * (midR - 2);
+                //     ctx.save();
+                //     ctx.beginPath();
+                //     ctx.fillStyle = ring.colorDot;
+                //     ctx.shadowBlur = 8;
+                //     ctx.shadowColor = ring.colorDot;
+                //     ctx.arc(cx + dx, cy + dy, 3.4, 0, Math.PI * 2);
+                //     ctx.fill();
+                //     ctx.restore();
+                // }
 
                 // ─── ANILLO 3: clock-hand field (restored) ────────────
                 // 60 uniform ticks at radius 65, length 5, line 1 px,
