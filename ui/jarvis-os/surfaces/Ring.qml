@@ -209,14 +209,14 @@ PanelWindow {
                 //         edges aligned). Center outerR + 42.75,
                 //         width 1.5 → outer edge outerR + 43.5
                 //         (matches A5A's outer edge).
-                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A5A.
+                //   Both at colorPrimary, α=0.5, shadowBlur=8 on A5A.
                 var a5R = outerR + 34.5;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(a5R, 40, 320, 18, ring.colorPrimary, 0.85);   // A5A — gap up
+                arc(a5R, 40, 320, 18, ring.colorPrimary, 0.5);   // A5A — gap up
                 ctx.restore();
-                circle(a5R + 8.25, 1.5, ring.colorPrimary, 0.85); // A5B — exterior aligned
+                circle(a5R + 8.25, 1.5, ring.colorPrimary, 0.5); // A5B — exterior aligned
 
                 // ─── ANILLO 3: two-layer ring (A3A + A3B) ─────────────
                 //   A3A — wide base, 280° arc with gap at 6 o'clock.
