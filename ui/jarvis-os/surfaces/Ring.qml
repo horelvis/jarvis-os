@@ -315,19 +315,29 @@ PanelWindow {
                 for (var c = 0; c < bandConfigs.length; c++) {
                     var cfg = bandConfigs[c];
                     // Speech simulator (F3a placeholder until F3b
-                    // wires the voice daemon). When the agent is
-                    // active, each band gets its own per-frame pulse
-                    // — bass slower (low frequencies), treble faster
-                    // (high frequencies) — so the band field reads
-                    // like jarvis is talking. Idle keeps the static
-                    // audioAmp so the orb is calm when nothing's
-                    // happening.
+                    // wires the voice daemon). Three components per
+                    // band, all gated on `ring.agentActive`:
+                    //
+                    //   1. bandPulse — per-band amplitude pulse so the
+                    //      lobes grow and shrink (bass slow, treble
+                    //      fast).
+                    //   2. phaseMul — multiply the angular phase
+                    //      advance ×4 so the wave-form rolls around
+                    //      the orb noticeably faster when speaking.
+                    //   3. speechTurb — small extra phase perturbation
+                    //      so the lobes don't move at a constant
+                    //      angular speed; reads as less periodic,
+                    //      more natural for speech.
                     var bandPulse = ring.agentActive
                         ? 1.0
                           + 0.5 * Math.sin(t * (2 + c * 1.5))
                           + 0.3 * Math.sin(t * (5 + c * 2.0) + c * 0.7)
                         : 1.0;
                     var ampPulsed = amp * Math.max(0, bandPulse);
+                    var phaseMul = ring.agentActive ? 4.0 : 1.0;
+                    var speechTurb = ring.agentActive
+                        ? 0.4 * Math.sin(t * (3 + c * 1.3))
+                        : 0;
                     ctx.save();
                     ctx.beginPath();
                     ctx.strokeStyle = cfg.color;
@@ -338,7 +348,9 @@ PanelWindow {
                         var btheta = bdeg * Math.PI / 180;
                         var br = bandRBase + cfg.rOffset
                                  + cfg.ampMul * ampPulsed
-                                   * Math.sin(cfg.n * btheta + t * cfg.speed);
+                                   * Math.sin(cfg.n * btheta
+                                              + t * cfg.speed * phaseMul
+                                              + speechTurb);
                         var bx = cx + br * Math.cos(btheta);
                         var by = cy + br * Math.sin(btheta);
                         if (first) {
@@ -378,8 +390,10 @@ PanelWindow {
 
         // ─── Status text under the orb ────────────────────────────────
         Text {
+            // topMargin pushed down so the label sits below A5's outer
+            // edge (radius ≈ 157 from stage center).
             anchors.top: stage.verticalCenter
-            anchors.topMargin: 130
+            anchors.topMargin: 175
             anchors.horizontalCenter: stage.horizontalCenter
             color: ring.colorPrimary
             font.family: "monospace"
