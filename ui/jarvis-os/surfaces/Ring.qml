@@ -184,16 +184,16 @@ PanelWindow {
                 // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — outer ticks at outerR + 22.
+                // ANILLO 5 — outer ticks at outerR + 11.
                 //   • 64 ticks, length 11, line 1.6 px, rotating at
                 //     orb.spin / 2.
-                //   • Inner edge at outerR + 11; outer edge at
-                //     outerR + 22. With the old A5 outer ring removed,
-                //     these ticks now float in the previously occupied
-                //     slot and read as a standalone radial field.
-                //   • Outer edge sits 3.5 px inside the inner edge of
-                //     ANILLO 6 (outerR + 25.5).
-                ticks(outerR + 22, 64, 11, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
+                //   • Radius reduced 50 % (was outerR + 22). Outer
+                //     edge now at outerR + 11; inner edge at outerR.
+                //     The ticks slot in just outside the middle ring
+                //     stack and leave a wide ~14 px clear band
+                //     between them and ANILLO 6's inner edge
+                //     (outerR + 25.5).
+                ticks(outerR + 11, 64, 11, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
                 // ANILLO 6 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
