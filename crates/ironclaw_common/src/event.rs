@@ -331,6 +331,24 @@ pub enum AppEvent {
     #[serde(rename = "heartbeat")]
     Heartbeat,
 
+    /// Real-time audio level snapshot from the voice daemon's TTS output.
+    ///
+    /// Emitted by `jarvis_voice_daemon` just before each PCM chunk is
+    /// written to the speaker, so the orb's audio bands react to what
+    /// the user is hearing — not to mic input. Transport-only by
+    /// design: there is no state backing this event, and replay after
+    /// a reconnect is meaningless (the audio has already played).
+    #[serde(rename = "audio_level")]
+    AudioLevel {
+        /// Root-mean-square amplitude of the PCM frame, normalised to `[0, 1]`.
+        rms: f32,
+        /// Per-band magnitudes (logarithmic FFT bands, currently 5),
+        /// normalised to `[0, 1]`. `Vec` rather than a fixed array so
+        /// future tuning of the band count doesn't require a
+        /// wire-format break.
+        bands: Vec<f32>,
+    },
+
     // Sandbox job streaming events (worker + Claude Code bridge)
     #[serde(rename = "job_message")]
     JobMessage {
@@ -710,6 +728,7 @@ impl AppEvent {
             Self::GateResolved { .. } => "gate_resolved",
             Self::Error { .. } => "error",
             Self::Heartbeat => "heartbeat",
+            Self::AudioLevel { .. } => "audio_level",
             Self::JobMessage { .. } => "job_message",
             Self::JobToolUse { .. } => "job_tool_use",
             Self::JobToolResult { .. } => "job_tool_result",
@@ -838,6 +857,10 @@ mod tests {
                 thread_id: None,
             },
             AppEvent::Heartbeat,
+            AppEvent::AudioLevel {
+                rms: 0.0,
+                bands: vec![],
+            },
             AppEvent::JobMessage {
                 job_id: String::new(),
                 role: String::new(),
