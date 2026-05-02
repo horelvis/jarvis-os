@@ -43,12 +43,16 @@ PanelWindow {
         width: 600
         height: 240
 
-        // ─── Synthetic waveform crossing the stage horizontally ───────
-        // Three superimposed sines at different frequencies and phases,
-        // refreshed at ~30 fps. An envelope dips the amplitude near the
-        // core so the waveform looks like it's emerging *from* the
-        // core, not overlapping it. F3b swaps phase/amplitude for the
-        // voice daemon's running level + dominant-band data.
+        // ─── Synthetic circular waveforms wrapping the core ───────────
+        // Three concentric undulating rings — closed curves whose radius
+        // varies with the angle: r(θ,t) = R_base + A·sin(n·θ + φ·t).
+        // Each curve has its own n (petal count), phase speed, and
+        // amplitude, so the field breathes asymmetrically without any
+        // single frequency dominating. Spec sec. 5.4.3.
+        //
+        // F3a uses synthetic phase animation; F3b swaps `phase` and
+        // `amplitude` for the voice daemon's running level + dominant-
+        // band data so the rings react to actual audio.
         Canvas {
             id: waveform
             anchors.fill: parent
@@ -62,14 +66,16 @@ PanelWindow {
                 if (ring.offline) {
                     return;
                 }
-                var w = width;
-                var h = height;
-                var cy = h / 2;
+                var cx = width / 2;
+                var cy = height / 2;
                 var amp = waveform.amplitude;
+                var t = waveform.phase;
+                // rBase: average radius. ampMul: how much the radius
+                // wobbles. n: number of petals. speed: phase ω.
                 var configs = [
-                    { color: ring.colorSoft,    width: 1.0, freq: 0.030, ampMul: 14, phase: phase * 1.7 },
-                    { color: ring.colorPrimary, width: 1.6, freq: 0.018, ampMul: 26, phase: phase * 1.0 },
-                    { color: ring.colorAccent,  width: 1.2, freq: 0.011, ampMul: 20, phase: phase * 0.6 + 1.2 }
+                    { color: ring.colorSoft,    width: 0.9, rBase: 78,  ampMul: 5,  n: 11, speed: 1.3 },
+                    { color: ring.colorPrimary, width: 1.5, rBase: 100, ampMul: 8,  n: 7,  speed: 1.0 },
+                    { color: ring.colorAccent,  width: 1.2, rBase: 128, ampMul: 6,  n: 5,  speed: 0.6 }
                 ];
                 for (var c = 0; c < configs.length; c++) {
                     var cfg = configs[c];
@@ -77,16 +83,22 @@ PanelWindow {
                     ctx.strokeStyle = cfg.color;
                     ctx.lineWidth = cfg.width;
                     ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.55 : 0.7) * amp;
-                    for (var x = 0; x <= w; x += 2) {
-                        var distFromCore = Math.abs(x - w / 2);
-                        // Envelope dips around the core so the wave
-                        // doesn't overlap the orb.
-                        var envelope = Math.min(1.0, distFromCore / 130);
-                        var y = cy + Math.sin(x * cfg.freq + cfg.phase)
-                                       * cfg.ampMul * amp * envelope;
-                        if (x === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
+                    var firstPoint = true;
+                    for (var deg = 0; deg <= 360; deg += 1) {
+                        var theta = deg * Math.PI / 180;
+                        var r = cfg.rBase
+                                + cfg.ampMul * amp
+                                  * Math.sin(cfg.n * theta + t * cfg.speed);
+                        var px = cx + r * Math.cos(theta);
+                        var py = cy + r * Math.sin(theta);
+                        if (firstPoint) {
+                            ctx.moveTo(px, py);
+                            firstPoint = false;
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
                     }
+                    ctx.closePath();
                     ctx.stroke();
                 }
                 ctx.globalAlpha = 1.0;
