@@ -122,17 +122,22 @@ sudo cp -r "$JARVIS_OS_DIR/ui/jarvis-os"/* /usr/share/jarvis-os/qml/
 sudo chmod +x /usr/share/jarvis-os/qml/scripts/jarvis-ui-toggle.sh
 log "  ui/jarvis-os/ copiado a /usr/share/jarvis-os/qml/"
 
-# systemd-user unit (no se enable hasta que el user haga login).
+# systemd-user units (no se enable hasta que el user haga login).
+# ironclaw.service: IronClaw headless (gateway + local_ipc, no TUI).
+# jarvis-ui.service: Quickshell ring/widgets — BindsTo=ironclaw.service
+# así que arrancar el UI levanta IronClaw automáticamente.
 install -d "$HOME/.config/systemd/user"
+cp "$JARVIS_OS_DIR/arch/systemd-user/ironclaw.service" \
+    "$HOME/.config/systemd/user/ironclaw.service"
 cp "$JARVIS_OS_DIR/arch/systemd-user/jarvis-ui.service" \
     "$HOME/.config/systemd/user/jarvis-ui.service"
 sudo pacman -S --noconfirm --needed socat   # QML lee el socket via socat
 
 systemctl --user daemon-reload
-systemctl --user enable jarvis-ui.service
-log "  jarvis-ui.service enabled"
-log "  (arranca automáticamente al login Hyprland; o manual:"
-log "   systemctl --user start jarvis-ui)"
+systemctl --user enable ironclaw.service jarvis-ui.service
+log "  ironclaw.service + jarvis-ui.service enabled"
+log "  (arrancan automáticamente al login Hyprland; o manual:"
+log "   systemctl --user start jarvis-ui  # también levanta ironclaw)"
 
 # ─── Step 7: Wallpaper jarvis-os ───
 log "Copiando wallpaper a ~/Pictures/jarvis-os/..."

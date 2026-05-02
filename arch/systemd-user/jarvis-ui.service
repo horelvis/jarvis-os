@@ -1,7 +1,13 @@
 [Unit]
 Description=jarvis-os UI (Quickshell layer-shell + ring + widgets)
-After=graphical-session.target
+After=graphical-session.target ironclaw.service
 PartOf=graphical-session.target
+# The UI is a consumer of the IronClaw event bus (local_ipc socket).
+# Without IronClaw running there is no socket and the orb stays
+# OFFLINE forever. Wants+BindsTo ties the lifecycles: starting the UI
+# pulls IronClaw up, and stopping/failing IronClaw stops the UI too.
+Wants=ironclaw.service
+BindsTo=ironclaw.service
 
 [Service]
 Type=simple

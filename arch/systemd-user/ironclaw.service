@@ -1,0 +1,20 @@
+[Unit]
+Description=IronClaw agent (headless — gateway + local_ipc, no TUI)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# Headless mode: gateway + local_ipc up, TUI disabled. The TUI is for
+# interactive use via `jarvis-chat run` from a terminal — this systemd
+# path is for background presence so jarvis-ui (Quickshell ring +
+# widgets) has a bus to consume from as soon as the desktop session
+# starts.
+Environment=CLI_MODE=disabled
+EnvironmentFile=-%h/.ironclaw/.env
+ExecStart=/usr/local/bin/ironclaw run
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
