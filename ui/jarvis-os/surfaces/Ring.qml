@@ -157,9 +157,12 @@ PanelWindow {
                 //   [deco a]  Status dots (4 amber points, top-right)
                 //   [deco b]  Progress accent (amber arc, tool load)
                 //   ANILLO 4  Middle ring (20-segment + thick 270° arc)
-                //   ANILLO 5  Outer ring (glow + 8-segment ring)
-                //   ANILLO 6  Outer ticks (64 uniform ticks, rotates)
-                //   ANILLO 7  Outermost frame ring (thick uniform)
+                //   ANILLO 5  Outer ticks (64 uniform ticks, rotates)
+                //   ANILLO 6  Outermost frame ring (thick uniform)
+                //
+                // (The previous ANILLO 5 — outer ring at outerR with glow
+                // + 8-segment band — was deleted per user request; the
+                // remaining outer-stack rings shifted up one number.)
                 //
                 // The on-paint order below is *outside in* so the inner
                 // elements visually win when they overlap. The numbering
@@ -178,37 +181,26 @@ PanelWindow {
                 ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── ANILLO 5 + 6 + 7: outer stack ────────────────────
+                // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — outer ring at outerR.
-                //   • glowCircle: solid stroke 5 px with shadowBlur=10.
-                //   • segmentedRing: 8 segments, 18° gap, 7 px stroke,
-                //     rotates clockwise (orb.spin).
-                glowCircle(outerR, 5, ring.colorPrimary, 0.95, 10);
-                segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
-
-                // ANILLO 6 — outer ticks at outerR + 22.
-                //   • 64 ticks, length 11 (10% longer than before),
-                //     line 1.6 px, rotate at half the speed of the
-                //     outer segmented ring so the two don't move in
-                //     lockstep.
-                //   • Float between ANILLO 5 (inner side, ~11 px gap)
-                //     and ANILLO 7 (outer side, ~3 px gap to inner
-                //     edge of A7 at outerR+25.5).
+                // ANILLO 5 — outer ticks at outerR + 22.
+                //   • 64 ticks, length 11, line 1.6 px, rotating at
+                //     orb.spin / 2.
+                //   • Inner edge at outerR + 11; outer edge at
+                //     outerR + 22. With the old A5 outer ring removed,
+                //     these ticks now float in the previously occupied
+                //     slot and read as a standalone radial field.
+                //   • Outer edge sits 3.5 px inside the inner edge of
+                //     ANILLO 6 (outerR + 25.5).
                 ticks(outerR + 22, 64, 11, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ANILLO 7 — outermost frame ring.
-                //   • Width 18 px. To grow the doubled width *outward
-                //     only* (and not invade ANILLO 6 ticks at outerR+22),
-                //     the center sits at outerR + 34.5 — that puts the
-                //     inner edge of the stroke at outerR + 25.5, the
-                //     same place it lived when width was 9 at center
-                //     outerR + 30.
-                //   • Alpha 0.55 (not 0.85). A 1 px tick at α=0.85 reads
-                //     as tenue, but an 18 px stroke + glow at the same
-                //     α reads as nearly solid; α=0.55 is the
-                //     perceptual match to ANILLO 3.
+                // ANILLO 6 — outermost frame ring.
+                //   • Width 18 px. Center at outerR + 34.5 so the
+                //     inner edge sits at outerR + 25.5 (3.5 px clear
+                //     of A5 ticks).
+                //   • Alpha 0.55 — perceptual match to ANILLO 3 on a
+                //     thick stroke + glow.
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
