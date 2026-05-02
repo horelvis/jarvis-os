@@ -156,32 +156,11 @@ PanelWindow {
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
                 ticks(outerR + 18, 64, 14, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ─── Outermost ring: variable-thickness lobed ring ────
-                // Wraps everything else. Drawn as 180 short arc segments
-                // whose lineWidth modulates with angle + a counter-
-                // rotating phase shift, so the thick lobes orbit slowly
-                // around the orb without bitmap pixelation.
-                var outerMostR = outerR + 38;
-                ctx.save();
-                ctx.shadowBlur = 14;
-                ctx.shadowColor = ring.colorPrimary;
-                ctx.strokeStyle = ring.colorPrimary;
-                ctx.lineCap = "round";
-                ctx.globalAlpha = 0.92;
-                var oStep = 2;
-                var oStepRad = oStep * Math.PI / 180;
-                for (var oDeg = 0; oDeg < 360; oDeg += oStep) {
-                    var oTheta = oDeg * Math.PI / 180;
-                    // Two thick lobes orbiting CCW relative to the
-                    // inner variable ring's direction — keeps the two
-                    // lobed rings from beating in lockstep.
-                    var oW = 1.4 + 5.0 * Math.abs(Math.sin(oTheta - orb.phase));
-                    ctx.lineWidth = oW;
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, outerMostR, oTheta, oTheta + oStepRad);
-                    ctx.stroke();
-                }
-                ctx.restore();
+                // ─── Outermost ring: uniform thickness, hugs the ticks
+                // Sits at the outer edge of the 64-tick field
+                // (outerR + 18) so it visually closes the radial
+                // marks. Fixed stroke, soft glow.
+                glowCircle(outerR + 18, 3, ring.colorPrimary, 0.92, 12);
 
                 // ─── Middle ring ─────────────────────────────────────
                 segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
@@ -289,9 +268,9 @@ PanelWindow {
                     ctx.restore();
                 }
 
-                // ─── Core decoration ─────────────────────────────────
-                circle(coreR, 1.5, "rgba(111,234,255,0.20)", 0.7);
-                circle(coreR + 14, 1, "rgba(111,234,255,0.10)", 0.6);
+                // (Core decoration intentionally omitted — user removed
+                // the central disc + label, leaving the audio bands
+                // free to breathe in the empty center.)
             }
 
             Timer {
@@ -306,41 +285,6 @@ PanelWindow {
             }
 
             Component.onCompleted: requestPaint()
-        }
-
-        // ─── Core disc + J.A.R.V.I.S. text (outside Canvas) ───────────
-        // Crisp Text rendering rather than fillText. The disc is a
-        // Rectangle so the shape is hit-test-clean even though the
-        // surface is overall pointer-pass-through.
-        Item {
-            id: core
-            anchors.centerIn: parent
-            width: 80
-            height: 80
-
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: ring.colorDeep
-                opacity: 0.4
-            }
-            Rectangle {
-                anchors.fill: parent
-                radius: width / 2
-                color: "transparent"
-                border.color: ring.colorPrimary
-                border.width: 1
-                opacity: 0.7
-            }
-            Text {
-                anchors.centerIn: parent
-                text: "J.A.R.V.I.S."
-                color: ring.colorSoft
-                font.family: "monospace"
-                font.pixelSize: 11
-                font.bold: true
-                font.letterSpacing: 0.8
-            }
         }
 
         // ─── Status text under the orb ────────────────────────────────
