@@ -209,26 +209,26 @@ PanelWindow {
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
-                // ─── ANILLO 4: two-layer ring (A4A + A4B), same A2 pattern.
-                //   A4A — wide base, 220° arc only (gap centered at
-                //         12 o'clock). Center midR, width 8 → outer
-                //         edge midR + 4.
-                //   A4B — bright hairline, full circle. Center
-                //         midR + 3.25, width 1.5 → outer edge midR + 4
-                //         (matches A4A's outer edge).
+                // ─── ANILLO 4: two-layer ring (A4A + A4B), opposite of A2.
+                //   A4A — wide base, 220° arc with gap at 6 o'clock
+                //         (the inverse of A2A, whose gap is at 12).
+                //         Sweep 250°..470° (= 110° wrapping past 0°)
+                //         covers the top arc, leaving the bottom open.
+                //         Center midR, width 16 → inner edge midR-8,
+                //         outer edge midR+8.
+                //   A4B — bright hairline, full circle. INTERIOR edges
+                //         align (not exterior, as in A2). Center
+                //         midR-7.25, width 1.5 → inner edge midR-8
+                //         (matches A4A's inner edge).
                 //   Both at colorPrimary, alpha 0.85, shadowBlur=8 on
                 //   A4A only.
-                //
-                // (The previous middle stack — segmentedRing 20 segs,
-                // helper circle, thick 270° arc — was replaced at user
-                // request to unify A4 with the A2 design language.)
                 var a4R = midR;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(a4R, 70, 290, 8, ring.colorPrimary, 0.85);   // A4A
+                arc(a4R, 250, 470, 16, ring.colorPrimary, 0.85);   // A4A
                 ctx.restore();
-                circle(a4R + 3.25, 1.5, ring.colorPrimary, 0.85); // A4B
+                circle(a4R - 7.25, 1.5, ring.colorPrimary, 0.85);  // A4B
 
                 // ─── [deco a + deco b] DISABLED ───────────────────────
                 // User: "no logro identificarlos" — the status dots and
