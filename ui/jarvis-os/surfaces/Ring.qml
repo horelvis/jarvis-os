@@ -196,11 +196,19 @@ PanelWindow {
                 //     and ANILLO 7 (outer side, ~8 px gap).
                 ticks(outerR + 22, 64, 10, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ANILLO 7 — outermost frame ring at outerR + 30.
-                //   • Uniform thickness 18 px (2× the previous 9 px),
-                //     alpha 0.85 to match ANILLO 3 (clock-hand field),
-                //     shadowBlur=12. Static. Visually closes the orb.
-                glowCircle(outerR + 30, 18, ring.colorPrimary, 0.85, 12);
+                // ANILLO 7 — outermost frame ring.
+                //   • Width 18 px. To grow the doubled width *outward
+                //     only* (and not invade ANILLO 6 ticks at outerR+22),
+                //     the center sits at outerR + 34.5 — that puts the
+                //     inner edge of the stroke at outerR + 25.5, the
+                //     same place it lived when width was 9 at center
+                //     outerR + 30.
+                //   • Alpha 0.55 (not 0.85). A 1 px tick at α=0.85 reads
+                //     as tenue, but an 18 px stroke + glow at the same
+                //     α reads as nearly solid; α=0.55 is the
+                //     perceptual match to ANILLO 3.
+                //   • shadowBlur=12. Static.
+                glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
                 // ─── ANILLO 4: middle ring stack ──────────────────────
                 //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
