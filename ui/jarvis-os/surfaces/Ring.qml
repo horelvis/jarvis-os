@@ -145,7 +145,30 @@ PanelWindow {
                     }
                 }
 
-                // ─── Soft center glow ─────────────────────────────────
+                // ═════════════════════════════════════════════════════════
+                // ORB LAYER MAP — drawn back-to-front (later draws on top).
+                // Numbered from the center outward so the design reads as
+                // a stack of rings, not a sequence of paint calls.
+                //
+                //   [bg]      Soft radial center glow (cyan halo)
+                //   ANILLO 1  Five overlapping audio bands (FFT bands)
+                //   ANILLO 2  Inner two-piece ring (270° thick + 90° thin)
+                //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
+                //   [deco a]  Status dots (4 amber points, top-right)
+                //   [deco b]  Progress accent (amber arc, tool load)
+                //   ANILLO 4  Middle ring (20-segment + thick 270° arc)
+                //   ANILLO 5  Outer ring (glow + 8-segment ring)
+                //   ANILLO 6  Outer ticks (64 uniform ticks, rotates)
+                //   ANILLO 7  Outermost frame ring (thick uniform)
+                //
+                // The on-paint order below is *outside in* so the inner
+                // elements visually win when they overlap. The numbering
+                // above is *inside out* for readability.
+                // ═════════════════════════════════════════════════════════
+
+                // ─── [bg] Soft center glow ────────────────────────────
+                // Radial gradient cyan that fades out at outerR. Anchors
+                // the orb on transparent backgrounds.
                 var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR);
                 grad.addColorStop(0.0, "rgba(70, 210, 255, 0.18)");
                 grad.addColorStop(0.4, "rgba(40, 160, 220, 0.10)");
@@ -155,38 +178,50 @@ PanelWindow {
                 ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── Outer ring: glow + segmented + 64 ticks ─────────
-                // Ticks float between the outer ring (at outerR) and
-                // the outermost ring (at outerR + 30). Centered at
-                // outerR + 22 with length 10 → run from outerR + 12 to
-                // outerR + 22, leaving ~12 px of clear space on the
-                // inner side and ~8 px on the outer side.
+                // ─── ANILLO 5 + 6 + 7: outer stack ────────────────────
+                // Drawn first so the inner layers paint on top of them.
+                //
+                // ANILLO 5 — outer ring at outerR.
+                //   • glowCircle: solid stroke 5 px with shadowBlur=10.
+                //   • segmentedRing: 8 segments, 18° gap, 7 px stroke,
+                //     rotates clockwise (orb.spin).
                 glowCircle(outerR, 5, ring.colorPrimary, 0.95, 10);
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
+
+                // ANILLO 6 — outer ticks at outerR + 22.
+                //   • 64 ticks, length 10, line 1.6 px, rotate at half
+                //     the speed of the outer segmented ring so the two
+                //     don't move in lockstep.
+                //   • Float between ANILLO 5 (inner side, ~12 px gap)
+                //     and ANILLO 7 (outer side, ~8 px gap).
                 ticks(outerR + 22, 64, 10, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ─── Outermost ring: uniform thickness, separated from ticks
-                // The 64 ticks end at outerR + 22; this ring sits at
-                // outerR + 30 with a thick 9 px stroke (3× the
-                // previous 3 px) so it visually frames the whole orb.
+                // ANILLO 7 — outermost frame ring at outerR + 30.
+                //   • Uniform thickness 9 px (3× the previous 3 px),
+                //     shadowBlur=12. Static. Visually closes the orb.
                 glowCircle(outerR + 30, 9, ring.colorPrimary, 0.92, 12);
 
-                // ─── Middle ring ─────────────────────────────────────
+                // ─── ANILLO 4: middle ring stack ──────────────────────
+                //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
+                //     stroke, counter-rotates at -spin*0.7.
+                //   • Faint full circle at midR for visual continuity
+                //     when the segmented gaps line up.
+                //   • Thick 270° arc at midR + 8 with the gap centered
+                //     at 12 o'clock (clock degrees 45..315). Static.
                 segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
                               1.0, -orb.spin * 0.7);
                 circle(midR, 1.5, "rgba(120,220,255,0.35)", 0.85);
-
-                // Thick 270° arc with gap centered at the top.
-                // PathAngleArc convention here: degToRad already
-                // subtracts 90, so a1=45 and a2=315 traces clockwise
-                // leaving the top 90° open.
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
                 arc(midR + 8, 45, 315, 4, ring.colorPrimary, 0.95);
                 ctx.restore();
 
-                // ─── Progress accent (amber, tool load) ──────────────
+                // ─── [deco b] Progress accent (amber arc, tool load) ──
+                // Lives on the middle ring (midR - 6). Length scales
+                // 0..120° with `ring.toolLoad`; saturates at 3 active
+                // tools. End caps drawn as short fat arcs so the
+                // accent reads as engineered, not stamped.
                 if (ring.toolLoad > 0.001) {
                     var progStart = 230;
                     var progEnd = progStart + ring.toolLoad * 120;
@@ -197,7 +232,9 @@ PanelWindow {
                         ring.colorAccent, 0.9);
                 }
 
-                // ─── Status dots (4 amber points, top right) ─────────
+                // ─── [deco a] Status dots (4 amber points) ────────────
+                // Sit just inside the middle ring (midR - 2), top-right
+                // arc (clock degrees 332 + d·11, d=0..3). shadowBlur=8.
                 for (var d = 0; d < 4; ++d) {
                     var da = degToRad(332 + d * 11);
                     var dx = Math.cos(da) * (midR - 2);
@@ -212,18 +249,17 @@ PanelWindow {
                     ctx.restore();
                 }
 
-                // ─── Clock hand field: 60 uniform ticks rotating ─────
-                // Separated from the inner two-piece ring (at innerR)
-                // with a clear gap. Ticks are centered at innerR + 18
-                // with length 5 → run from innerR + 13 to innerR + 18,
-                // floating between the inner ring and the middle ring.
+                // ─── ANILLO 3: inner clock-hand field ─────────────────
+                // 60 uniform ticks at innerR + 18, length 5, line 1 px.
+                // Rotates with `orb.spin`. Floats between ANILLO 2 and
+                // the middle ring (~6 px gap on each side).
                 ticks(innerR + 18, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
-                // ─── Inner "variable" ring: discrete two-piece, static ─
-                // 270° thick segment + 90° thin segment. The user wants
-                // discrete pieces (not a sinusoidal distribution) AND
-                // it should not rotate — fixed in place. Gap currently
-                // lives at the top-left (270°–360° in clock coords).
+                // ─── ANILLO 2: inner two-piece "variable" ring ────────
+                // Discrete two-piece ring at innerR: a 270° thick segment
+                // (5 px) plus a 90° thin segment (1.2 px). Static — no
+                // rotation. Gap is at the top-left (270°..360° in clock
+                // coords). shadowBlur=12 wraps both pieces in glow.
                 ctx.save();
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = ring.colorSoft;
@@ -231,14 +267,19 @@ PanelWindow {
                 arc(innerR, 270, 360, 1.2, ring.colorSoft, 0.55);
                 ctx.restore();
 
-                // Faint helper rings around the inner area.
+                // Faint helper ring just inside ANILLO 2 (innerR - 16).
                 circle(innerR - 16, 1.5, "rgba(140,235,255,0.22)", 0.8);
 
-                // ─── Five overlapping audio bands (same radius) ──────
-                // All bands at the same rBase so they overlap; n /
-                // speed / color give each band its visual identity.
-                // User asked for the band radius halved; previous
-                // value was coreR + 8.
+                // ─── ANILLO 1: five overlapping audio bands ───────────
+                // The innermost layer. Five closed undulating curves
+                // at the SAME radius (no staircase): each band is
+                //   r(θ,t) = bandRBase + ampMul · audioAmp · sin(n·θ + ω·t)
+                // so they overlap continuously, never drawing the same
+                // shape. Bands differ by n (petal count) / ω (phase
+                // speed) / color, simulating bass / low-mid / mid /
+                // high-mid / treble. F3a uses synthetic phases; F3b
+                // will swap them for the voice daemon's per-band level
+                // data so the bands react to actual audio.
                 var bandRBase = (coreR + 8) / 2;
                 var bandConfigs = [
                     { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },
