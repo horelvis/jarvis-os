@@ -41,7 +41,10 @@ PanelWindow {
         id: stage
         anchors.centerIn: parent
         width: 600
-        height: 240
+        // Height grew from 240 to 360 to fit the five-band circular
+        // waveform whose outermost ring reaches ~165 px radius from
+        // the core.
+        height: 360
 
         // ─── Synthetic circular waveforms wrapping the core ───────────
         // Three concentric undulating rings — closed curves whose radius
@@ -72,10 +75,17 @@ PanelWindow {
                 var t = waveform.phase;
                 // rBase: average radius. ampMul: how much the radius
                 // wobbles. n: number of petals. speed: phase ω.
+                // One ring per audio band so each band gets its own
+                // visual identity. F3b will drive `phase` per band from
+                // the voice daemon's per-band level data; in F3a the
+                // independent `speed` values already make every band
+                // move differently from the others.
                 var configs = [
-                    { color: ring.colorSoft,    width: 0.9, rBase: 78,  ampMul: 5,  n: 11, speed: 1.3 },
-                    { color: ring.colorPrimary, width: 1.5, rBase: 100, ampMul: 8,  n: 7,  speed: 1.0 },
-                    { color: ring.colorAccent,  width: 1.2, rBase: 128, ampMul: 6,  n: 5,  speed: 0.6 }
+                    { color: ring.colorAccent, width: 1.4, rBase: 78,  ampMul: 7,  n: 4,  speed: 0.4 },  // bass — amber
+                    { color: ring.colorDeep,   width: 1.2, rBase: 100, ampMul: 7,  n: 6,  speed: 0.7 },  // low-mid — cyan deep
+                    { color: ring.colorPrimary,width: 1.5, rBase: 122, ampMul: 8,  n: 8,  speed: 1.0 },  // mid — cyan primary
+                    { color: ring.colorSoft,   width: 1.0, rBase: 142, ampMul: 6,  n: 11, speed: 1.3 },  // high-mid — cyan soft
+                    { color: "#f7d59b",        width: 0.9, rBase: 160, ampMul: 5,  n: 14, speed: 1.7 }   // treble — amber soft
                 ];
                 for (var c = 0; c < configs.length; c++) {
                     var cfg = configs[c];
@@ -111,153 +121,6 @@ PanelWindow {
             onTriggered: {
                 waveform.phase += 0.12;
                 waveform.requestPaint();
-            }
-        }
-
-        // ─── Concentric rings wrapping the core ───────────────────────
-        // Eight rings of varying thickness around the central orb.
-        // Two of them (indices 0 and 5) rotate, giving life to the
-        // composition. Every 3rd ring is amber as accent. Stroke width
-        // alternates so the ring field has visual rhythm rather than a
-        // uniform comb-line look.
-        //
-        // The model array carries radius offset, stroke width, color
-        // selector, dash spec, and rotation flag per ring.
-        Item {
-            id: ringField
-            anchors.centerIn: parent
-            width: 320
-            height: 320
-
-            Repeater {
-                model: [
-                    { r: 0,   w: 1.0,  c: 0, dash: false, rotate: true,  rotMs: 18000 },
-                    { r: 14,  w: 0.5,  c: 0, dash: false, rotate: false, rotMs: 0 },
-                    { r: 22,  w: 1.8,  c: 0, dash: false, rotate: false, rotMs: 0 },
-                    { r: 36,  w: 0.5,  c: 1, dash: false, rotate: false, rotMs: 0 },
-                    { r: 44,  w: 1.0,  c: 0, dash: false, rotate: false, rotMs: 0 },
-                    { r: 58,  w: 2.5,  c: 2, dash: false, rotate: true,  rotMs: 11000 },
-                    { r: 72,  w: 0.5,  c: 0, dash: false, rotate: false, rotMs: 0 },
-                    { r: 84,  w: 1.4,  c: 1, dash: true,  rotate: false, rotMs: 0 }
-                ]
-                delegate: Item {
-                    id: concentricRing
-                    required property var modelData
-                    required property int index
-                    anchors.centerIn: parent
-                    width: 140 + modelData.r * 2
-                    height: 140 + modelData.r * 2
-
-                    rotation: 0
-                    RotationAnimation on rotation {
-                        running: modelData.rotate && !ring.offline
-                        from: 0; to: 360
-                        duration: ring.agentActive
-                            ? modelData.rotMs / 2.5
-                            : modelData.rotMs
-                        loops: Animation.Infinite
-                    }
-
-                    Shape {
-                        anchors.fill: parent
-                        ShapePath {
-                            strokeColor: modelData.c === 2
-                                ? ring.colorAccent
-                                : (modelData.c === 1
-                                    ? ring.colorDeep
-                                    : ring.colorPrimary)
-                            strokeWidth: modelData.w
-                            fillColor: "transparent"
-                            strokeStyle: modelData.dash
-                                ? ShapePath.DashLine
-                                : ShapePath.SolidLine
-                            dashPattern: [3, 4]
-                            PathAngleArc {
-                                centerX: concentricRing.width / 2
-                                centerY: concentricRing.height / 2
-                                radiusX: concentricRing.width / 2
-                                radiusY: concentricRing.height / 2
-                                startAngle: 0
-                                sweepAngle: 360
-                            }
-                        }
-                    }
-
-                    // Cardinal tick marks on the outermost solid ring
-                    Repeater {
-                        model: modelData.r === 22 ? 12 : 0
-                        Item {
-                            width: concentricRing.width
-                            height: concentricRing.height
-                            anchors.centerIn: parent
-                            rotation: index * 30
-                            Rectangle {
-                                width: 1
-                                height: index % 3 === 0 ? 8 : 4
-                                color: ring.colorPrimary
-                                opacity: index % 3 === 0 ? 0.95 : 0.55
-                                anchors.top: parent.top
-                                anchors.horizontalCenter: parent.horizontalCenter
-                            }
-                        }
-                    }
-
-                    // Cardinal letters N/E/S/W just inside the second
-                    // ring, kept upright via counter-rotation.
-                    Repeater {
-                        model: modelData.r === 22
-                            ? [
-                                { label: "N", angle: 0   },
-                                { label: "E", angle: 90  },
-                                { label: "S", angle: 180 },
-                                { label: "W", angle: 270 }
-                              ]
-                            : []
-                        Item {
-                            width: concentricRing.width
-                            height: concentricRing.height
-                            anchors.centerIn: parent
-                            rotation: modelData.angle
-                            Text {
-                                text: modelData.label
-                                color: ring.colorPrimary
-                                opacity: 0.6
-                                font.family: "monospace"
-                                font.pixelSize: 7
-                                font.letterSpacing: 1
-                                anchors.top: parent.top
-                                anchors.topMargin: 12
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                rotation: -modelData.angle
-                            }
-                        }
-                    }
-
-                    // Slash dashes on the rotating mid ring (r=58).
-                    // Four short bars at 0/90/180/270 degrees that
-                    // travel with the rotation animation, giving the
-                    // ring a "scanner" feel.
-                    Repeater {
-                        model: modelData.r === 58 ? 4 : 0
-                        Item {
-                            width: concentricRing.width
-                            height: concentricRing.height
-                            anchors.centerIn: parent
-                            rotation: index * 90
-                            Rectangle {
-                                width: 14
-                                height: 2
-                                color: index % 2 === 0
-                                    ? ring.colorPrimary
-                                    : ring.colorAccent
-                                opacity: ring.offline ? 0.3 : 0.9
-                                anchors.top: parent.top
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.topMargin: -1
-                            }
-                        }
-                    }
-                }
             }
         }
 
