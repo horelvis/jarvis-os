@@ -64,12 +64,15 @@ PanelWindow {
             renderStrategy: Canvas.Cooperative
 
             // Animated phases. `spin` drives ring rotations; `phase`
-            // drives the variable-thickness lobe and the breathing
-            // audio bands.
+            // drives the breathing audio bands.
+            //
+            // The F3a `audioAmp` (0.35 ↔ 1.0 fade gated on tool
+            // activity) was retired in F3b/B5 — the bands now read
+            // their amplitude directly from `EventBus.audioLevel` and
+            // `EventBus.audioBands[c]`, which the EventBus decay
+            // timer fades back to 0 when speech ends.
             property real spin: 0
             property real phase: 0
-            property real audioAmp: ring.agentActive ? 1.0 : 0.35
-            Behavior on audioAmp { NumberAnimation { duration: 350 } }
 
             onPaint: {
                 var ctx = getContext("2d");
@@ -289,19 +292,24 @@ PanelWindow {
                 // now have the inner ground entirely to themselves.)
 
                 // ─── ANILLO 1: five overlapping audio bands ───────────
-                // bandRBase pulled back to 30 after the user reduced
-                // the band radius again ("reducir radio de A1"); line
-                // width bumped 1.2 → 2.5 ("añadir más grosor") so the
-                // strokes are visible on the smaller circumference.
+                // bandRBase = 30, line width 2.5 (held over from F3a).
                 // Five closed undulating curves with a small radial
                 // staircase (rOffset 0/2/4/6/8) so the bands separate
                 // a bit instead of fully overlapping. Each band is
                 //   r(θ,t) = bandRBase + rOffset
-                //          + ampMul · audioAmp · sin(n·θ + ω·t)
+                //          + ampMul · bandMag · sin(n·θ + ω·t·phaseMul)
                 // Bands differ by n (petal count) / ω (phase speed) /
-                // color, simulating bass / low-mid / mid / high-mid /
-                // treble. F3a uses synthetic phases; F3b will swap them
-                // for the voice daemon's per-band level data.
+                // color, mapping bass → treble.
+                //
+                // F3b/B5: amplitudes and phase speed come from real
+                // PCM analysis. `EventBus.audioBands[c]` carries the
+                // per-band FFT magnitude in [0, 1]; `EventBus.audioLevel`
+                // is the overall RMS (drives both `phaseMul` so the
+                // lobes roll faster when louder, and the band stroke
+                // alpha so silent moments fade gracefully). When no
+                // audio_level events arrive, EventBus's decay timer
+                // pulls both back to 0 and the bands settle to a
+                // baseline pattern (`bandFloor`).
                 var bandRBase = 30;
                 var bandConfigs = [
                     { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4, rOffset: 0 },  // bass
@@ -311,46 +319,35 @@ PanelWindow {
                     { color: "#f7d59b",         ampMul: 3,  n: 14, speed: 1.7, rOffset: 8 }   // treble
                 ];
                 var t = orb.phase;
-                var amp = orb.audioAmp;
+                var rms = EventBus.audioLevel;          // [0, 1]
+                var bands = EventBus.audioBands;        // [0..1, ×5]
+                // Phase rolls slowly when silent (speed = 1×), peaks
+                // at 4× when audio is at max RMS — matches the F3a
+                // simulator's "active" feel without faking it.
+                var phaseMul = 1.0 + rms * 3.0;
+                // Stroke alpha: 0.35 baseline so the bands stay
+                // visible when idle, scaled up to the F3a active
+                // range as RMS climbs.
+                var alphaScale = Math.max(0.35, rms);
+                // Floor so each band has a small breathing animation
+                // even when its magnitude is 0 — keeps the orb from
+                // looking dead between sentences.
+                var bandFloor = 0.35;
                 for (var c = 0; c < bandConfigs.length; c++) {
                     var cfg = bandConfigs[c];
-                    // Speech simulator (F3a placeholder until F3b
-                    // wires the voice daemon). Three components per
-                    // band, all gated on `ring.agentActive`:
-                    //
-                    //   1. bandPulse — per-band amplitude pulse so the
-                    //      lobes grow and shrink (bass slow, treble
-                    //      fast).
-                    //   2. phaseMul — multiply the angular phase
-                    //      advance ×4 so the wave-form rolls around
-                    //      the orb noticeably faster when speaking.
-                    //   3. speechTurb — small extra phase perturbation
-                    //      so the lobes don't move at a constant
-                    //      angular speed; reads as less periodic,
-                    //      more natural for speech.
-                    var bandPulse = ring.agentActive
-                        ? 1.0
-                          + 0.5 * Math.sin(t * (2 + c * 1.5))
-                          + 0.3 * Math.sin(t * (5 + c * 2.0) + c * 0.7)
-                        : 1.0;
-                    var ampPulsed = amp * Math.max(0, bandPulse);
-                    var phaseMul = ring.agentActive ? 4.0 : 1.0;
-                    var speechTurb = ring.agentActive
-                        ? 0.4 * Math.sin(t * (3 + c * 1.3))
-                        : 0;
+                    var bandMag = Math.max(bandFloor, (bands[c] || 0) * 2.0);
                     ctx.save();
                     ctx.beginPath();
                     ctx.strokeStyle = cfg.color;
                     ctx.lineWidth = 2.5;
-                    ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.6 : 0.7) * amp;
+                    ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.6 : 0.7) * alphaScale;
                     var first = true;
                     for (var bdeg = 0; bdeg <= 360; bdeg += 1) {
                         var btheta = bdeg * Math.PI / 180;
                         var br = bandRBase + cfg.rOffset
-                                 + cfg.ampMul * ampPulsed
+                                 + cfg.ampMul * bandMag
                                    * Math.sin(cfg.n * btheta
-                                              + t * cfg.speed * phaseMul
-                                              + speechTurb);
+                                              + t * cfg.speed * phaseMul);
                         var bx = cx + br * Math.cos(btheta);
                         var by = cy + br * Math.sin(btheta);
                         if (first) {

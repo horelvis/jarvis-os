@@ -19,9 +19,40 @@ QtObject {
 
     // Real-time TTS audio levels (driven by AppEvent::AudioLevel from
     // IronClaw's TtsAudioPipeline). The orb's audio bands subscribe to
-    // these properties; resets to silence when no events arrive.
+    // these properties; the decay timer below drives them back to
+    // silence when no events arrive.
     property real audioLevel: 0.0          // RMS, normalised to [0, 1]
     property var audioBands: [0.0, 0.0, 0.0, 0.0, 0.0]
+    // Wall-clock millisecond of the last audio_level event. Used by
+    // the decay timer to detect "no audio for a while" and fade the
+    // levels back to 0 — without this, ElevenLabs going silent at the
+    // end of a turn leaves the orb stuck at the last band magnitudes.
+    property int _lastAudioMs: 0
+
+    property var _audioDecayTimer: Timer {
+        // 20 Hz check is plenty: audio frames arrive at ~30 Hz, so
+        // detecting stale state within ~50 ms is well under the
+        // human eye's perception of "stuck".
+        interval: 50
+        running: true
+        repeat: true
+        onTriggered: {
+            if (bus._lastAudioMs === 0) return;
+            var dt = Date.now() - bus._lastAudioMs;
+            if (dt < 100) return;  // still active, leave alone
+            // Multiplicative decay → reaches ~0 in ~10 ticks (500 ms)
+            // after the agent goes silent. Faster than NumberAnimation
+            // because we don't want a visible tail.
+            bus.audioLevel *= 0.7;
+            if (bus.audioLevel < 0.001) bus.audioLevel = 0;
+            var decayed = [];
+            for (var i = 0; i < bus.audioBands.length; i++) {
+                var v = bus.audioBands[i] * 0.7;
+                decayed.push(v < 0.001 ? 0 : v);
+            }
+            bus.audioBands = decayed;
+        }
+    }
 
     // Signals dispatched to widgets
     signal toolStarted(string name, string callId)
@@ -92,6 +123,7 @@ QtObject {
         if (ev.type === "audio_level") {
             if (typeof ev.rms === "number") bus.audioLevel = ev.rms;
             if (Array.isArray(ev.bands)) bus.audioBands = ev.bands;
+            bus._lastAudioMs = Date.now();
             return;
         }
 
