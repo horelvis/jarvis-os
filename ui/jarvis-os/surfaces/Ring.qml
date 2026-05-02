@@ -156,6 +156,33 @@ PanelWindow {
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
                 ticks(outerR + 18, 64, 14, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
+                // ─── Outermost ring: variable-thickness lobed ring ────
+                // Wraps everything else. Drawn as 180 short arc segments
+                // whose lineWidth modulates with angle + a counter-
+                // rotating phase shift, so the thick lobes orbit slowly
+                // around the orb without bitmap pixelation.
+                var outerMostR = outerR + 38;
+                ctx.save();
+                ctx.shadowBlur = 14;
+                ctx.shadowColor = ring.colorPrimary;
+                ctx.strokeStyle = ring.colorPrimary;
+                ctx.lineCap = "round";
+                ctx.globalAlpha = 0.92;
+                var oStep = 2;
+                var oStepRad = oStep * Math.PI / 180;
+                for (var oDeg = 0; oDeg < 360; oDeg += oStep) {
+                    var oTheta = oDeg * Math.PI / 180;
+                    // Two thick lobes orbiting CCW relative to the
+                    // inner variable ring's direction — keeps the two
+                    // lobed rings from beating in lockstep.
+                    var oW = 1.4 + 5.0 * Math.abs(Math.sin(oTheta - orb.phase));
+                    ctx.lineWidth = oW;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, outerMostR, oTheta, oTheta + oStepRad);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
                 // ─── Middle ring ─────────────────────────────────────
                 segmentedRing(midR, 20, 5, 12, "rgba(120,220,255,0.55)",
                               1.0, -orb.spin * 0.7);
