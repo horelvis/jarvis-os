@@ -54,6 +54,7 @@ pub mod document_extraction;
 pub mod error;
 pub mod estimation;
 pub mod evaluation;
+pub mod events;
 pub mod extensions;
 pub mod gate;
 pub(crate) mod generated_images;
