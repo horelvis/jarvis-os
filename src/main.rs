@@ -1054,10 +1054,42 @@ async fn async_main() -> anyhow::Result<()> {
                 fresh
             }
         };
+
+        // ── TTS audio bus ──────────────────────────────────────────────
+        //
+        // If a TTS backend is configured, instantiate it and start the
+        // analysis pipeline. The backend is the ingress point for PCM
+        // frames coming over IPC from the voice daemon (or, in the
+        // future, an in-process Piper / Kokoro engine pushing directly).
+        // The pipeline subscribes to the backend's broadcast channel,
+        // analyses each frame, and emits `AppEvent::AudioLevel` over
+        // the same EventBus the UI orb already subscribes to.
+        let tts_backend = match config.audio.tts_backend {
+            ironclaw::audio::TtsBackendKind::ElevenlabsIpc => {
+                let backend = Arc::new(
+                    ironclaw::audio::backends::ElevenLabsIpcBackend::new(
+                        config.audio.frame_buffer,
+                    ),
+                );
+                let _pipeline_handle = ironclaw::audio::TtsAudioPipeline::spawn(
+                    backend.clone(),
+                    Arc::clone(&sse_for_local),
+                );
+                tracing::info!(
+                    backend = "elevenlabs_ipc",
+                    frame_buffer = config.audio.frame_buffer,
+                    "tts audio pipeline started"
+                );
+                Some(backend)
+            }
+            ironclaw::audio::TtsBackendKind::None => None,
+        };
+
         match ironclaw::channels::local_ipc::create(
             config.owner_id.clone(),
             sse_for_local,
             config.channels.local_ipc.writer_buffer,
+            tts_backend,
         )
         .await
         {

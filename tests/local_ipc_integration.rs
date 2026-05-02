@@ -34,6 +34,7 @@ async fn spawn_channel(socket_path: std::path::PathBuf) -> (Arc<LocalIpcChannel>
         "owner".into(),
         Arc::clone(&sse),
         16,
+        None,
     ));
     let _stream = chan.start().await.expect("start");
     wait_for_bind(&socket_path).await;
@@ -155,6 +156,7 @@ async fn spawn_channel_with_stream(
         "owner".into(),
         Arc::clone(&sse),
         16,
+        None,
     ));
     let stream = chan.start().await.expect("start");
     wait_for_bind(&socket_path).await;
@@ -283,7 +285,7 @@ async fn test_socket_file_cleanup_on_shutdown() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("h8.sock");
     let sse = Arc::new(EventBus::new());
-    let chan = LocalIpcChannel::new(path.clone(), "owner".into(), sse, 16);
+    let chan = LocalIpcChannel::new(path.clone(), "owner".into(), sse, 16, None);
     let _ = chan.start().await.unwrap();
     wait_for_bind(&path).await;
     assert!(path.exists());

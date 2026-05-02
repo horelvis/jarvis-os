@@ -41,7 +41,9 @@ pub fn build_control_submission(
             // current turn for this user_id regardless.
             Submission::Interrupt
         }
-        ClientCommand::Message { .. } | ClientCommand::Ping => return Ok(None),
+        ClientCommand::Message { .. }
+        | ClientCommand::Ping
+        | ClientCommand::TtsPcmFrame { .. } => return Ok(None),
     };
     let metadata = serde_json::json!({ "client_id": client_id.as_str() });
     Ok(Some(

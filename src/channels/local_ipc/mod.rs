@@ -19,6 +19,7 @@ pub use channel_impl::LocalIpcChannel;
 pub use error::LocalIpcError;
 pub use socket::{SocketResolution, resolve_socket_path};
 
+use crate::audio::backends::ElevenLabsIpcBackend;
 use crate::events::EventBus;
 
 /// Build a `LocalIpcChannel` ready to be added to `ChannelManager`, or
@@ -27,10 +28,15 @@ use crate::events::EventBus;
 /// Performs orphan-socket cleanup before the channel binds in
 /// `start()`. The bind itself happens lazily on `start()` so the
 /// caller can wire the channel into `ChannelManager` synchronously.
+///
+/// `tts_backend` is forwarded into per-session readers so incoming
+/// `ClientCommand::TtsPcmFrame` payloads (from the voice daemon)
+/// reach the analysis pipeline. Pass `None` when TTS is disabled.
 pub async fn create(
     user_id: String,
     sse: Arc<EventBus>,
     writer_buffer: usize,
+    tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
 ) -> Result<Option<LocalIpcChannel>, LocalIpcError> {
     let path = match resolve_socket_path() {
         SocketResolution::Disabled => {
@@ -56,6 +62,7 @@ pub async fn create(
         user_id,
         sse,
         writer_buffer,
+        tts_backend,
     )))
 }
 
@@ -88,7 +95,7 @@ mod tests {
             std::env::set_var("IRONCLAW_LOCAL_SOCKET", "disabled");
         }
         let sse = Arc::new(EventBus::new());
-        let result = create("owner".into(), sse, 256).await.unwrap();
+        let result = create("owner".into(), sse, 256, None).await.unwrap();
         unsafe {
             match prev {
                 Some(v) => std::env::set_var("IRONCLAW_LOCAL_SOCKET", v),

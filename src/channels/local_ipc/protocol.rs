@@ -173,6 +173,17 @@ pub enum ClientCommand {
         step_id: Option<String>,
     },
     Ping,
+    /// PCM frame from a TTS adapter (voice daemon, future bridges).
+    /// Routed by `dispatch_command` to the configured TTS backend's
+    /// `push_frame`, which fans out to the analysis pipeline. PCM is
+    /// base64-encoded as little-endian `i16` so the wire stays a flat
+    /// JSON line — same encoding ElevenLabs already uses to deliver
+    /// audio to the voice daemon, so the daemon can forward without
+    /// re-encoding.
+    TtsPcmFrame {
+        samples_b64: String,
+        sample_rate: u32,
+    },
 }
 
 #[cfg(test)]
@@ -230,6 +241,19 @@ mod command_tests {
         let raw = r#"{"type":"ping"}"#;
         let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
         assert_eq!(cmd, ClientCommand::Ping);
+    }
+
+    #[test]
+    fn tts_pcm_frame_roundtrip() {
+        let raw = r#"{"type":"tts_pcm_frame","samples_b64":"AAEC","sample_rate":16000}"#;
+        let cmd: ClientCommand = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            cmd,
+            ClientCommand::TtsPcmFrame {
+                samples_b64: "AAEC".into(),
+                sample_rate: 16_000,
+            }
+        );
     }
 
     #[test]
