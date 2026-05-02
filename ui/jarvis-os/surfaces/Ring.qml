@@ -152,18 +152,23 @@ PanelWindow {
                 //
                 //   [bg]      Soft radial center glow (cyan halo)
                 //   ANILLO 1  Five overlapping audio bands (FFT bands)
-                //   ANILLO 2  Clock-hand field (60 uniform ticks, rotates)
+                //   ANILLO 2  Two-layer ring (A2A 220° arc + A2B circle)
+                //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
                 //   [deco a]  Status dots (4 amber points, top-right)
                 //   [deco b]  Progress accent (amber arc, tool load)
-                //   ANILLO 3  Middle ring (20-segment + thick 270° arc)
-                //   ANILLO 4  Outer ticks (64 uniform ticks, rotates)
-                //   ANILLO 5  Outermost frame ring (thick uniform)
+                //   ANILLO 4  Middle ring (20-segment + thick 270° arc)
+                //   ANILLO 5  Outer ring (single continuous, was 64 ticks)
+                //   ANILLO 6  Outermost frame ring (thick uniform)
                 //
-                // History (deletions, with reasons): the original outer
-                // ring at outerR (glow + 8-segment band) and the inner
-                // two-piece ring at innerR (270° thick + 90° thin) were
-                // both removed at user request. Each removal collapsed
-                // the numbering; the layout above is the current state.
+                // History (current state):
+                //  • Original outer ring at outerR (glow + 8-segment) was
+                //    removed at user request (commit de73456c).
+                //  • Original inner two-piece ring at innerR (270°+90°)
+                //    was removed at user request (commit f954c4d8) — the
+                //    new ANILLO 2 above is its replacement.
+                //  • The clock-hand field was accidentally lost when A2
+                //    was rebuilt as two-layer; restored here at radius
+                //    65 (between A2 and the middle ring stack).
                 //
                 // The on-paint order below is *outside in* so the inner
                 // elements visually win when they overlap. The numbering
@@ -182,10 +187,10 @@ PanelWindow {
                 ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── ANILLO 4 + 5: outer stack ────────────────────────
+                // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 4 — single continuous ring at outerR + 3.5.
+                // ANILLO 5 — single continuous ring at outerR + 3.5.
                 //   • Replaced the previous 64-tick field with a single
                 //     thick ring that spans the same radial range
                 //     (outerR - 4 to outerR + 11), so visually the slot
@@ -198,7 +203,7 @@ PanelWindow {
                 //     dropped.
                 circle(outerR + 3.5, 15, ring.colorSoft, 0.7);
 
-                // ANILLO 5 — outermost frame ring.
+                // ANILLO 6 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
                 //     inner edge sits at outerR + 25.5 (well clear of
                 //     A4 ticks at outerR + 11).
@@ -207,7 +212,7 @@ PanelWindow {
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
-                // ─── ANILLO 3: middle ring stack ──────────────────────
+                // ─── ANILLO 4: middle ring stack ──────────────────────
                 //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
                 //     stroke, counter-rotates at -spin*0.7.
                 //   • Faint full circle at midR for visual continuity
@@ -255,6 +260,15 @@ PanelWindow {
                     ctx.restore();
                 }
 
+                // ─── ANILLO 3: clock-hand field (restored) ────────────
+                // 60 uniform ticks at radius 65, length 5, line 1 px,
+                // rotating with orb.spin. Was lost when the original
+                // ANILLO 2 (clock-hand at innerR+18) was rebuilt as a
+                // two-layer ring; restored here at radius 65 so it sits
+                // in the empty band between the new A2 (radius 44) and
+                // the middle ring stack (midR ≈ 89).
+                ticks(65, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
+
                 // ─── ANILLO 2: two-layer ring (A2A + A2B) ─────────────
                 // Two strokes that share color and alpha but differ in
                 // width and radius so their *outer edges align* — the
@@ -273,7 +287,7 @@ PanelWindow {
                 // hard highlight on top).
                 //
                 // a2R = 44 (was innerR + 18 = 88 — halved to clear
-                // ANILLO 3's middle ring at midR ≈ 89).
+                // ANILLO 4's middle ring at midR ≈ 89).
                 var a2R = (innerR + 18) / 2;
                 ctx.save();
                 ctx.shadowBlur = 8;
