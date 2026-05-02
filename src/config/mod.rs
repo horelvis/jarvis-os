@@ -20,6 +20,7 @@
 
 pub mod acp;
 mod agent;
+mod audio;
 mod builder;
 mod channels;
 mod database;
@@ -51,6 +52,7 @@ use crate::settings::Settings;
 
 // Re-export all public types so `crate::config::FooConfig` continues to work.
 pub use self::agent::AgentConfig;
+pub use self::audio::AudioConfig;
 pub use self::builder::BuilderModeConfig;
 pub use self::channels::{
     ChannelsConfig, CliConfig, DEFAULT_GATEWAY_PORT, GatewayConfig, GatewayOidcConfig, HttpConfig,
@@ -108,6 +110,7 @@ pub struct Config {
     pub tunnel: TunnelConfig,
     pub channels: ChannelsConfig,
     pub agent: AgentConfig,
+    pub audio: AudioConfig,
     pub safety: SafetyConfig,
     pub wasm: WasmConfig,
     pub secrets: SecretsConfig,
@@ -203,6 +206,7 @@ impl Config {
                 wasm_channel_owner_ids: HashMap::new(),
             },
             agent: AgentConfig::for_testing(),
+            audio: AudioConfig::default(),
             safety: SafetyConfig {
                 max_output_length: 100_000,
                 injection_check_enabled: false,
@@ -592,6 +596,7 @@ impl Config {
             tunnel,
             channels,
             agent: AgentConfig::resolve(settings)?,
+            audio: AudioConfig::resolve()?,
             safety: resolve_safety_config(settings)?,
             wasm: WasmConfig::resolve(settings)?,
             secrets: SecretsConfig::resolve().await?,

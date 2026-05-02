@@ -9,3 +9,11 @@
 //! describes is about to be heard by the user.
 
 pub mod analysis;
+pub mod backends;
+pub mod pipeline;
+pub mod tts;
+pub mod types;
+
+pub use pipeline::TtsAudioPipeline;
+pub use tts::{TtsBackend, TtsBackendKind};
+pub use types::PcmFrame;
