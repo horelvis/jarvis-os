@@ -197,9 +197,10 @@ PanelWindow {
                 ticks(outerR + 22, 64, 10, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
                 // ANILLO 7 — outermost frame ring at outerR + 30.
-                //   • Uniform thickness 9 px (3× the previous 3 px),
+                //   • Uniform thickness 18 px (2× the previous 9 px),
+                //     alpha 0.85 to match ANILLO 3 (clock-hand field),
                 //     shadowBlur=12. Static. Visually closes the orb.
-                glowCircle(outerR + 30, 9, ring.colorPrimary, 0.92, 12);
+                glowCircle(outerR + 30, 18, ring.colorPrimary, 0.85, 12);
 
                 // ─── ANILLO 4: middle ring stack ──────────────────────
                 //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
