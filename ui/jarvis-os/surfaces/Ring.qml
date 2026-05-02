@@ -152,17 +152,18 @@ PanelWindow {
                 //
                 //   [bg]      Soft radial center glow (cyan halo)
                 //   ANILLO 1  Five overlapping audio bands (FFT bands)
-                //   ANILLO 2  Inner two-piece ring (270° thick + 90° thin)
-                //   ANILLO 3  Clock-hand field (60 uniform ticks, rotates)
+                //   ANILLO 2  Clock-hand field (60 uniform ticks, rotates)
                 //   [deco a]  Status dots (4 amber points, top-right)
                 //   [deco b]  Progress accent (amber arc, tool load)
-                //   ANILLO 4  Middle ring (20-segment + thick 270° arc)
-                //   ANILLO 5  Outer ticks (64 uniform ticks, rotates)
-                //   ANILLO 6  Outermost frame ring (thick uniform)
+                //   ANILLO 3  Middle ring (20-segment + thick 270° arc)
+                //   ANILLO 4  Outer ticks (64 uniform ticks, rotates)
+                //   ANILLO 5  Outermost frame ring (thick uniform)
                 //
-                // (The previous ANILLO 5 — outer ring at outerR with glow
-                // + 8-segment band — was deleted per user request; the
-                // remaining outer-stack rings shifted up one number.)
+                // History (deletions, with reasons): the original outer
+                // ring at outerR (glow + 8-segment band) and the inner
+                // two-piece ring at innerR (270° thick + 90° thin) were
+                // both removed at user request. Each removal collapsed
+                // the numbering; the layout above is the current state.
                 //
                 // The on-paint order below is *outside in* so the inner
                 // elements visually win when they overlap. The numbering
@@ -181,30 +182,30 @@ PanelWindow {
                 ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── ANILLO 5 + 6: outer stack ────────────────────────
+                // ─── ANILLO 4 + 5: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — outer ticks at outerR + 11.
-                //   • 64 ticks, length 11, line 1.6 px, rotating at
+                // ANILLO 4 — outer ticks at outerR + 11.
+                //   • 64 ticks, length 15 (40% longer than the
+                //     previous 11), line 1.6 px, rotating at
                 //     orb.spin / 2.
-                //   • Radius reduced 50 % (was outerR + 22). Outer
-                //     edge now at outerR + 11; inner edge at outerR.
-                //     The ticks slot in just outside the middle ring
-                //     stack and leave a wide ~14 px clear band
-                //     between them and ANILLO 6's inner edge
-                //     (outerR + 25.5).
-                ticks(outerR + 11, 64, 11, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
+                //   • Outer edge at outerR + 11; inner edge at
+                //     outerR - 4. The longer ticks now reach a bit
+                //     past where the deleted outer ring used to live.
+                //   • Outer edge sits 14.5 px inside the inner edge
+                //     of ANILLO 5 (outerR + 25.5).
+                ticks(outerR + 11, 64, 15, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
-                // ANILLO 6 — outermost frame ring.
+                // ANILLO 5 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
-                //     inner edge sits at outerR + 25.5 (3.5 px clear
-                //     of A5 ticks).
-                //   • Alpha 0.55 — perceptual match to ANILLO 3 on a
+                //     inner edge sits at outerR + 25.5 (well clear of
+                //     A4 ticks at outerR + 11).
+                //   • Alpha 0.55 — perceptual match to ANILLO 2 on a
                 //     thick stroke + glow.
                 //   • shadowBlur=12. Static.
                 glowCircle(outerR + 34.5, 18, ring.colorPrimary, 0.55, 12);
 
-                // ─── ANILLO 4: middle ring stack ──────────────────────
+                // ─── ANILLO 3: middle ring stack ──────────────────────
                 //   • segmentedRing at midR: 20 segments, 5° gap, 12 px
                 //     stroke, counter-rotates at -spin*0.7.
                 //   • Faint full circle at midR for visual continuity
@@ -252,26 +253,16 @@ PanelWindow {
                     ctx.restore();
                 }
 
-                // ─── ANILLO 3: inner clock-hand field ─────────────────
+                // ─── ANILLO 2: inner clock-hand field ─────────────────
                 // 60 uniform ticks at innerR + 18, length 5, line 1 px.
-                // Rotates with `orb.spin`. Floats between ANILLO 2 and
-                // the middle ring (~6 px gap on each side).
+                // Rotates with `orb.spin`. With the old A2 inner ring
+                // gone, the ticks now sit alone above the audio bands.
                 ticks(innerR + 18, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
-                // ─── ANILLO 2: inner two-piece "variable" ring ────────
-                // Discrete two-piece ring at innerR: a 270° thick segment
-                // (5 px) plus a 90° thin segment (1.2 px). Static — no
-                // rotation. Gap is at the top-left (270°..360° in clock
-                // coords). shadowBlur=12 wraps both pieces in glow.
-                ctx.save();
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = ring.colorSoft;
-                arc(innerR, 0,   270, 5,   ring.colorSoft, 0.95);
-                arc(innerR, 270, 360, 1.2, ring.colorSoft, 0.55);
-                ctx.restore();
-
-                // Faint helper ring just inside ANILLO 2 (innerR - 16).
-                circle(innerR - 16, 1.5, "rgba(140,235,255,0.22)", 0.8);
+                // (The original ANILLO 2 — inner two-piece ring at
+                // innerR, plus its faint helper at innerR-16 — was
+                // removed at user request. The audio bands of ANILLO 1
+                // now have the inner ground entirely to themselves.)
 
                 // ─── ANILLO 1: five overlapping audio bands ───────────
                 // The innermost layer. Five closed undulating curves
