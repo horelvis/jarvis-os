@@ -314,6 +314,20 @@ PanelWindow {
                 var amp = orb.audioAmp;
                 for (var c = 0; c < bandConfigs.length; c++) {
                     var cfg = bandConfigs[c];
+                    // Speech simulator (F3a placeholder until F3b
+                    // wires the voice daemon). When the agent is
+                    // active, each band gets its own per-frame pulse
+                    // — bass slower (low frequencies), treble faster
+                    // (high frequencies) — so the band field reads
+                    // like jarvis is talking. Idle keeps the static
+                    // audioAmp so the orb is calm when nothing's
+                    // happening.
+                    var bandPulse = ring.agentActive
+                        ? 1.0
+                          + 0.5 * Math.sin(t * (2 + c * 1.5))
+                          + 0.3 * Math.sin(t * (5 + c * 2.0) + c * 0.7)
+                        : 1.0;
+                    var ampPulsed = amp * Math.max(0, bandPulse);
                     ctx.save();
                     ctx.beginPath();
                     ctx.strokeStyle = cfg.color;
@@ -323,7 +337,7 @@ PanelWindow {
                     for (var bdeg = 0; bdeg <= 360; bdeg += 1) {
                         var btheta = bdeg * Math.PI / 180;
                         var br = bandRBase + cfg.rOffset
-                                 + cfg.ampMul * amp
+                                 + cfg.ampMul * ampPulsed
                                    * Math.sin(cfg.n * btheta + t * cfg.speed);
                         var bx = cx + br * Math.cos(btheta);
                         var by = cy + br * Math.sin(btheta);
