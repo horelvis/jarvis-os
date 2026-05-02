@@ -225,14 +225,16 @@ PanelWindow {
                 //   A3B — bright hairline, full circle. Interior edges
                 //         align with A3A. Center midR-7.25, width 1.5
                 //         → inner edge midR-8.
-                //   Both at colorPrimary, α=0.85, shadowBlur=8 on A3A.
+                //   Both at colorPrimary, α=0.3 (translúcido — A3 is
+                //   the lightest of the structural rings now), with
+                //   shadowBlur=8 on A3A.
                 var a3R = midR;
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorPrimary;
-                arc(a3R, 220, 500, 16, ring.colorPrimary, 0.85);   // A3A
+                arc(a3R, 220, 500, 16, ring.colorPrimary, 0.3);    // A3A
                 ctx.restore();
-                circle(a3R - 7.25, 1.5, ring.colorPrimary, 0.85);  // A3B
+                circle(a3R - 7.25, 1.5, ring.colorPrimary, 0.3);   // A3B
 
                 // ─── [deco a + deco b] DISABLED ───────────────────────
                 // User: "no logro identificarlos" — the status dots and
