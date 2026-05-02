@@ -57,7 +57,11 @@ PanelWindow {
             id: orb
             anchors.fill: parent
             antialiasing: true
-            renderStrategy: Canvas.Threaded
+            // Cooperative renderer syncs with the main render loop;
+            // Threaded was producing visible stutter on the rotating
+            // rings — frames could be dropped or arrive late on this
+            // hardware.
+            renderStrategy: Canvas.Cooperative
 
             // Animated phases. `spin` drives ring rotations; `phase`
             // drives the variable-thickness lobe and the breathing
@@ -274,12 +278,16 @@ PanelWindow {
             }
 
             Timer {
-                interval: 33                    // ~30 fps
+                // 60 fps — 30 fps was producing visible stutter on
+                // the rotating outer / middle / clock rings. Per-frame
+                // increments halved so the perceived rotation speed
+                // stays constant.
+                interval: 16
                 running: !ring.offline
                 repeat: true
                 onTriggered: {
-                    orb.spin = (orb.spin + 0.6) % 360;
-                    orb.phase += 0.025;
+                    orb.spin = (orb.spin + 0.3) % 360;
+                    orb.phase += 0.012;
                     orb.requestPaint();
                 }
             }
