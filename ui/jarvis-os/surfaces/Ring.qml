@@ -258,21 +258,23 @@ PanelWindow {
                 // the layered-strokes design rule (see
                 // feedback_layered_strokes_for_thickness memory).
                 //
-                //   A2A — wide translucent base. Width 8 px, alpha 0.32.
-                //         shadowBlur=8 in cyanSoft for ambient halo.
-                //   A2B — bright hairline highlight. Width 1.5 px,
-                //         alpha 0.95, no extra blur (the base already
-                //         carries the glow).
+                //   A2A — wide translucent base, **220° arc only**.
+                //         Width 8 px, alpha 0.32, shadowBlur=8 in
+                //         cyanSoft. Gap is centered at 12 o'clock
+                //         (70°..290° clockwise → 140° gap on top).
+                //   A2B — bright hairline highlight, full circle.
+                //         Width 1.5 px, alpha 0.95, no extra blur.
                 //
-                // Both at innerR + 18 — the same radius the previous
-                // 60-tick clock-hand field used to anchor on. The pair
-                // reads as a single "double-line" ring with depth.
+                // Both at innerR + 18. A2B remains continuous so the
+                // ring still reads as closed; A2A's 220° arc creates
+                // the layered "double-width" effect only on the lower
+                // ¾ of the ring.
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = ring.colorSoft;
-                circle(innerR + 18, 8,   ring.colorSoft,    0.32);   // A2A
+                arc(innerR + 18, 70, 290, 8, ring.colorSoft, 0.32);   // A2A
                 ctx.restore();
-                circle(innerR + 18, 1.5, ring.colorPrimary, 0.95);   // A2B
+                circle(innerR + 18, 1.5, ring.colorPrimary, 0.95);    // A2B
 
                 // (The original ANILLO 2 — inner two-piece ring at
                 // innerR, plus its faint helper at innerR-16 — was
