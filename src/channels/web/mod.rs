@@ -72,7 +72,6 @@ use self::log_layer::{LogBroadcaster, LogLevelHandle};
 use self::auth::{CombinedAuthState, DbAuthenticator, MultiAuthState};
 use self::platform::state::GatewayState;
 use self::sse::SseManager;
-use self::types::AppEvent;
 
 fn build_gateway_auth_manager(
     state: &GatewayState,
@@ -694,261 +693,39 @@ impl Channel for GatewayChannel {
         msg: &IncomingMessage,
         response: OutgoingResponse,
     ) -> Result<(), ChannelError> {
-        let thread_id = match &msg.thread_id {
-            Some(tid) => tid.as_str().to_string(),
-            None => {
-                return Err(ChannelError::MissingRoutingTarget {
-                    name: "gateway".to_string(),
-                    reason: "respond() requires a thread_id on the incoming message".to_string(),
-                });
-            }
-        };
-
-        self.state.sse.broadcast_for_user(
-            &msg.user_id,
-            AppEvent::Response {
-                content: response.content,
-                thread_id,
-            },
-        );
-
+        // Validate that the thread_id was set by the caller — keep the
+        // hard error so misuse surfaces. The broadcast itself is now done
+        // by `ChannelManager::respond` before this method runs (single
+        // producer for the channel-dispatch flow).
+        if msg.thread_id.is_none() {
+            return Err(ChannelError::MissingRoutingTarget {
+                name: "gateway".to_string(),
+                reason: "respond() requires a thread_id on the incoming message".to_string(),
+            });
+        }
+        let _ = response; // already published to the EventBus by ChannelManager
         Ok(())
     }
 
     async fn send_status(
         &self,
-        status: StatusUpdate,
-        metadata: &serde_json::Value,
+        _status: StatusUpdate,
+        _metadata: &serde_json::Value,
     ) -> Result<(), ChannelError> {
-        // Skip verbose-only events (ToolResultFull, TurnMetrics) entirely
-        // when no debug subscriber is connected — avoids cloning up to 50 KB
-        // of tool output and allocating model-name strings on every tool
-        // call. Gating on `has_verbose_receivers()` (not just
-        // `has_receivers()`) keeps the short-circuit active even when
-        // ordinary non-debug subscribers are present, which is the common
-        // case for non-admin browser tabs.
-        if status.is_verbose_only() && !self.state.sse.has_verbose_receivers() {
-            return Ok(());
-        }
-
-        let thread_id = metadata
-            .get("thread_id")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-        let event = match status {
-            StatusUpdate::Thinking(msg) => AppEvent::Thinking {
-                message: msg,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::ToolStarted {
-                name,
-                detail,
-                call_id,
-            } => AppEvent::ToolStarted {
-                name,
-                detail,
-                call_id,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::ToolCompleted {
-                name,
-                success,
-                error,
-                parameters,
-                call_id,
-                duration_ms,
-            } => AppEvent::ToolCompleted {
-                name,
-                success,
-                error,
-                parameters,
-                call_id,
-                duration_ms,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::ToolResult {
-                name,
-                preview,
-                call_id,
-            } => AppEvent::ToolResult {
-                name,
-                preview,
-                call_id,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::StreamChunk(content) => AppEvent::StreamChunk {
-                content,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::Status(msg) => AppEvent::Status {
-                message: msg,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::JobStarted {
-                job_id,
-                title,
-                browse_url,
-            } => AppEvent::JobStarted {
-                job_id,
-                title,
-                browse_url,
-            },
-            StatusUpdate::ApprovalNeeded {
-                request_id,
-                tool_name,
-                description,
-                parameters,
-                allow_always,
-            } => AppEvent::ApprovalNeeded {
-                request_id,
-                tool_name,
-                description,
-                parameters: serde_json::to_string_pretty(&parameters)
-                    .unwrap_or_else(|_| parameters.to_string()),
-                thread_id,
-                allow_always,
-            },
-            StatusUpdate::AuthRequired {
-                extension_name,
-                instructions,
-                auth_url,
-                setup_url,
-                request_id,
-            } => AppEvent::OnboardingState {
-                extension_name,
-                state: ironclaw_common::OnboardingStateDto::AuthRequired,
-                request_id,
-                message: None,
-                instructions,
-                auth_url,
-                setup_url,
-                onboarding: None,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::AuthCompleted {
-                extension_name,
-                success,
-                message,
-            } => AppEvent::OnboardingState {
-                extension_name,
-                state: if success {
-                    ironclaw_common::OnboardingStateDto::Ready
-                } else {
-                    ironclaw_common::OnboardingStateDto::Failed
-                },
-                request_id: None,
-                message: Some(message),
-                instructions: None,
-                auth_url: None,
-                setup_url: None,
-                onboarding: None,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::ImageGenerated {
-                event_id,
-                data_url,
-                path,
-            } => AppEvent::ImageGenerated {
-                event_id,
-                data_url,
-                path,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::Suggestions { suggestions } => AppEvent::Suggestions {
-                suggestions,
-                thread_id: thread_id.clone(),
-            },
-            StatusUpdate::ReasoningUpdate {
-                narrative,
-                decisions,
-            } => AppEvent::ReasoningUpdate {
-                narrative,
-                decisions: decisions
-                    .into_iter()
-                    .map(|d| crate::channels::web::types::ToolDecisionDto {
-                        tool_name: d.tool_name,
-                        rationale: d.rationale,
-                    })
-                    .collect(),
-                thread_id,
-            },
-            StatusUpdate::TurnCost {
-                input_tokens,
-                output_tokens,
-                cost_usd,
-            } => AppEvent::TurnCost {
-                input_tokens,
-                output_tokens,
-                cost_usd,
-                thread_id,
-            },
-            StatusUpdate::ToolResultFull {
-                name,
-                output,
-                truncated,
-                call_id,
-            } => AppEvent::ToolResultFull {
-                name,
-                output,
-                truncated: if truncated { Some(true) } else { None },
-                call_id,
-                thread_id,
-            },
-            StatusUpdate::TurnMetrics {
-                input_tokens,
-                output_tokens,
-                cache_read_tokens,
-                model,
-                duration_ms,
-                iteration,
-            } => AppEvent::TurnMetrics {
-                thread_id,
-                input_tokens,
-                output_tokens,
-                cache_read_tokens,
-                model,
-                duration_ms,
-                iteration,
-            },
-            StatusUpdate::JobStatus { job_id, status } => AppEvent::JobStatus {
-                job_id,
-                message: status,
-            },
-            StatusUpdate::JobResult { job_id, status } => AppEvent::JobResult {
-                job_id,
-                status,
-                session_id: None,
-                fallback_deliverable: None,
-            },
-            StatusUpdate::SkillActivated {
-                skill_names,
-                feedback,
-            } => AppEvent::SkillActivated {
-                skill_names,
-                thread_id,
-                feedback,
-            },
-            StatusUpdate::RoutineUpdate { .. }
-            | StatusUpdate::ContextPressure { .. }
-            | StatusUpdate::SandboxStatus { .. }
-            | StatusUpdate::SecretsStatus { .. }
-            | StatusUpdate::CostGuard { .. }
-            | StatusUpdate::ThreadList { .. }
-            | StatusUpdate::EngineThreadList { .. }
-            | StatusUpdate::ConversationHistory { .. } => {
-                return Ok(());
-            }
-        };
-
-        // Scope events to the user when user_id is available in metadata.
-        // When user_id is missing (heartbeat, routines), events go to all
-        // subscribers. In multi-tenant mode this leaks status across users.
-        if let Some(uid) = metadata.get("user_id").and_then(|v| v.as_str()) {
-            self.state.sse.broadcast_for_user(uid, event);
-        } else {
-            tracing::debug!("Status event missing user_id in metadata; broadcasting globally");
-            self.state.sse.broadcast(event);
-        }
+        // No-op: ChannelManager::send_status now publishes the equivalent
+        // AppEvent to the EventBus before invoking this method, and the
+        // SSE/WS handlers for browser subscribers read directly from the
+        // bus (it lives on `state.sse`, the same Arc the bus alias points
+        // at). Per-channel republishing is the duplicate this commit
+        // removes.
+        //
+        // The verbose-only short-circuit (`is_verbose_only &&
+        // !has_verbose_receivers`) was an optimization to skip a 50 KB
+        // payload clone when no debug subscriber was connected. Since the
+        // expensive conversion now happens once in `status_update_to_app_event`
+        // (called by ChannelManager), we lose a small amount of CPU per
+        // verbose event when no debug tab is open. If that becomes
+        // measurable, lift the guard up into ChannelManager.publish.
         Ok(())
     }
 
@@ -957,38 +734,40 @@ impl Channel for GatewayChannel {
         user_id: &str,
         response: OutgoingResponse,
     ) -> Result<(), ChannelError> {
-        let thread_id: String = match response.thread_id {
+        // ChannelManager::broadcast already published AppEvent::Response to
+        // the EventBus IF response.thread_id was present. When it's None
+        // (proactive broadcasts: mission notifications, self-repair,
+        // extension activation) the caller could not resolve a thread, so
+        // we fall back to the user's assistant conversation and publish
+        // ourselves with the resolved thread_id. ChannelManager skips the
+        // bus publish in that branch precisely so this fallback is the
+        // sole producer for the no-thread-id case.
+        let resolved_thread_id: String = match response.thread_id {
             Some(tid) => tid.into(),
-            None => {
-                // Proactive broadcasts (mission notifications, self-repair,
-                // extension activation) don't always have a thread context.
-                // Route to the user's assistant conversation so the message
-                // appears in a known location instead of being rejected.
-                match self.state.store.as_ref() {
-                    Some(store) => store
-                        .get_or_create_assistant_conversation(user_id, "gateway")
-                        .await
-                        .map(|id| id.to_string())
-                        .map_err(|e| ChannelError::SendFailed {
-                            name: "gateway".to_string(),
-                            reason: format!(
-                                "broadcast() has no thread_id and assistant thread lookup failed: {e}"
-                            ),
-                        })?,
-                    None => {
-                        return Err(ChannelError::MissingRoutingTarget {
-                            name: "gateway".to_string(),
-                            reason: "broadcast() has no thread_id and no DB to resolve assistant thread".to_string(),
-                        });
-                    }
+            None => match self.state.store.as_ref() {
+                Some(store) => store
+                    .get_or_create_assistant_conversation(user_id, "gateway")
+                    .await
+                    .map(|id| id.to_string())
+                    .map_err(|e| ChannelError::SendFailed {
+                        name: "gateway".to_string(),
+                        reason: format!(
+                            "broadcast() has no thread_id and assistant thread lookup failed: {e}"
+                        ),
+                    })?,
+                None => {
+                    return Err(ChannelError::MissingRoutingTarget {
+                        name: "gateway".to_string(),
+                        reason: "broadcast() has no thread_id and no DB to resolve assistant thread".to_string(),
+                    });
                 }
-            }
+            },
         };
         self.state.sse.broadcast_for_user(
             user_id,
-            AppEvent::Response {
+            ironclaw_common::AppEvent::Response {
                 content: response.content,
-                thread_id,
+                thread_id: resolved_thread_id,
             },
         );
         Ok(())

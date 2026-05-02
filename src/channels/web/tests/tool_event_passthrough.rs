@@ -1,8 +1,15 @@
-//! Regression: gateway `send_status()` must preserve per-tool identity fields
+//! Regression: tool status events must preserve per-tool identity fields
 //! needed by the web UI to render live tool activity correctly.
+//!
+//! Events flow through `ChannelManager::send_status` (single producer for
+//! the channel-dispatch flow). The browser SSE handler subscribes to the
+//! bus owned by the gateway's `state.sse` — same `Arc` the
+//! `ChannelManager` was wired to via `set_event_bus` at startup.
 
+use std::sync::Arc;
+
+use crate::channels::ChannelManager;
 use crate::channels::StatusUpdate;
-use crate::channels::channel::Channel;
 use crate::channels::web::GatewayChannel;
 use crate::channels::web::sse::DEFAULT_BROADCAST_BUFFER;
 use crate::config::GatewayConfig;
@@ -28,17 +35,22 @@ fn test_gateway() -> GatewayChannel {
 #[tokio::test]
 async fn gateway_send_status_preserves_tool_event_fields() {
     let gw = test_gateway();
-    let mut stream = gw
-        .state
-        .sse
+    let bus = Arc::clone(&gw.state.sse);
+    let mut stream = bus
         .subscribe_raw(Some("test-user".to_string()), false)
         .expect("subscribe should succeed");
+
+    let mgr = ChannelManager::new();
+    mgr.set_event_bus(Arc::clone(&bus)).await;
+    mgr.add(Box::new(gw)).await;
+
     let metadata = serde_json::json!({
         "user_id": "test-user",
         "thread_id": "thread-123"
     });
 
-    gw.send_status(
+    mgr.send_status(
+        "gateway",
         StatusUpdate::ToolStarted {
             name: "shell".to_string(),
             detail: Some("ls -la".to_string()),
@@ -47,9 +59,10 @@ async fn gateway_send_status_preserves_tool_event_fields() {
         &metadata,
     )
     .await
-    .expect("tool_started should broadcast");
+    .expect("tool_started should publish");
 
-    gw.send_status(
+    mgr.send_status(
+        "gateway",
         StatusUpdate::ToolCompleted {
             name: "shell".to_string(),
             success: true,
@@ -61,9 +74,10 @@ async fn gateway_send_status_preserves_tool_event_fields() {
         &metadata,
     )
     .await
-    .expect("tool_completed should broadcast");
+    .expect("tool_completed should publish");
 
-    gw.send_status(
+    mgr.send_status(
+        "gateway",
         StatusUpdate::ToolResult {
             name: "shell".to_string(),
             preview: "file_a\nfile_b".to_string(),
@@ -72,7 +86,7 @@ async fn gateway_send_status_preserves_tool_event_fields() {
         &metadata,
     )
     .await
-    .expect("tool_result should broadcast");
+    .expect("tool_result should publish");
 
     let started = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
         .await

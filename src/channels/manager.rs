@@ -251,27 +251,34 @@ impl ChannelManager {
 
     /// Broadcast a message to a specific user on a specific channel.
     ///
-    /// Used for proactive notifications like heartbeat alerts. Also publishes
-    /// the equivalent `AppEvent::Response` to the event bus.
+    /// Used for proactive notifications like heartbeat alerts. When the
+    /// `OutgoingResponse` has a `thread_id`, also publishes the equivalent
+    /// `AppEvent::Response` to the event bus.
+    ///
+    /// When `thread_id` is `None` (proactive broadcast with no thread
+    /// context — mission notifications, self-repair, extension activation),
+    /// the bus publish is **skipped here** and the per-channel impl is
+    /// responsible for resolving the routing target (e.g. the user's
+    /// assistant conversation) and publishing with the resolved id. This
+    /// keeps the assistant-conversation fallback in one place
+    /// (`WebChannel::broadcast`) and avoids two events on the bus with
+    /// different thread_ids.
     pub async fn broadcast(
         &self,
         channel_name: &str,
         user_id: &str,
         response: OutgoingResponse,
     ) -> Result<(), ChannelError> {
-        let thread_id = response
-            .thread_id
-            .as_ref()
-            .map(|t| t.as_str().to_string())
-            .unwrap_or_default();
-        self.publish(
-            Some(user_id),
-            AppEvent::Response {
-                content: response.content.clone(),
-                thread_id,
-            },
-        )
-        .await;
+        if let Some(tid) = response.thread_id.as_ref() {
+            self.publish(
+                Some(user_id),
+                AppEvent::Response {
+                    content: response.content.clone(),
+                    thread_id: tid.as_str().to_string(),
+                },
+            )
+            .await;
+        }
 
         let channels = self.channels.read().await;
         if let Some(channel) = channels.get(channel_name) {
