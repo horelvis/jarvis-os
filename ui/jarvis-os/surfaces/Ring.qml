@@ -210,16 +210,16 @@ PanelWindow {
                 // ─── Clock hand field: 60 uniform ticks rotating ─────
                 ticks(innerR + 12, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
-                // ─── Inner "variable" ring: discrete two-piece ─────────
-                // 270° thick segment + 90° thin segment, rotating as a
-                // unit. The user wanted discrete pieces (no smooth
-                // sinusoidal distribution): a thick arc, then drop
-                // back to the thin width, repeat each rotation.
+                // ─── Inner "variable" ring: discrete two-piece, static ─
+                // 270° thick segment + 90° thin segment. The user wants
+                // discrete pieces (not a sinusoidal distribution) AND
+                // it should not rotate — fixed in place. Gap currently
+                // lives at the top-left (270°–360° in clock coords).
                 ctx.save();
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = ring.colorSoft;
-                arc(innerR, orb.spin,         orb.spin + 270, 5,   ring.colorSoft, 0.95);
-                arc(innerR, orb.spin + 270,   orb.spin + 360, 1.2, ring.colorSoft, 0.55);
+                arc(innerR, 0,   270, 5,   ring.colorSoft, 0.95);
+                arc(innerR, 270, 360, 1.2, ring.colorSoft, 0.55);
                 ctx.restore();
 
                 // Faint helper rings around the inner area.
