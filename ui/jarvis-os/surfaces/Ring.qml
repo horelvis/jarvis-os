@@ -190,13 +190,15 @@ PanelWindow {
                 // ─── ANILLO 5 + 6: outer stack ────────────────────────
                 // Drawn first so the inner layers paint on top of them.
                 //
-                // ANILLO 5 — clock-hand field (mirrors ANILLO 3).
-                //   60 uniform ticks at radius outerR + 11, length 5,
-                //   line 1 px, colorPrimary alpha 0.85, rotating with
-                //   orb.spin. Same parameters as A3 except for the
-                //   radius — it's a second tick field on the outer
-                //   edge of the orb, mirroring the inner one.
-                ticks(outerR + 11, 60, 5, 1, ring.colorPrimary, 0.85, orb.spin, 0);
+                // ANILLO 5 — clock-hand field, mirrors ANILLO 3 but with
+                // longer ticks. 60 uniform ticks at radius outerR + 11,
+                // length 20 (4× A3's length 5), line 1 px,
+                // colorPrimary α=0.85, rotating with orb.spin.
+                //   • Outer edge at outerR + 11 ≈ 124.
+                //   • Inner edge at outerR - 9 ≈ 104.
+                //   • ~11 px gap from A4's outer edge (midR + 4 ≈ 93).
+                //   • ~14.5 px gap to A6's inner edge (outerR + 25.5).
+                ticks(outerR + 11, 60, 20, 1, ring.colorPrimary, 0.85, orb.spin, 0);
 
                 // ANILLO 6 — outermost frame ring.
                 //   • Width 18 px. Center at outerR + 34.5 so the
