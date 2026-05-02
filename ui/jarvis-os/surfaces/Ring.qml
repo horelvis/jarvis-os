@@ -3,17 +3,18 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import "../core"
-import "../theme"
 
 // Reference: ~/jarvis-orbe.jpg (2D, flat).
 // Layers from inside out:
 //   1. J.A.R.V.I.S. text + flat inner disc
-//   2. Variable-thickness ring (rotates slowly)
-//   3. 60 clock-hand ticks rotating as a single field
-//   4. Thick arc ring (270°, gap at top, rotates)
-//   5. Outer variable-thickness ring (rotates)
-//   6. Five concentric breathing audio bands (bass → treble)
-// Idle = slow rotation; ACTIVE = ~2.5× faster.
+//   2. Five overlapping audio bands at the SAME radius (interior).
+//      Each band has its own n / phase speed / color so the same ring
+//      breathes with multiple frequencies at once.
+//   3. Variable-thickness ring (pattern shifts via phase, no bitmap
+//      rotation — avoids canvas pixelation).
+//   4. 60 uniform-height clock-hand ticks rotating as a single field.
+//   5. Thick arc ring (270°, gap at top, rotates).
+//   6. Outer variable-thickness ring (phase-shifted, not rotated).
 PanelWindow {
     id: ring
 
@@ -29,10 +30,14 @@ PanelWindow {
     readonly property bool agentActive: Object.keys(EventBus.activeTools).length > 0
     readonly property bool offline: !EventBus.connected
 
-    readonly property color colorPrimary: ring.offline ? Palette.amber : Palette.cyanPrimary
-    readonly property color colorDeep:    ring.offline ? "#7a5a2a" : Palette.cyanDeep
-    readonly property color colorSoft:    ring.offline ? "#f7d59b" : Palette.cyanSoft
-    readonly property color colorAccent:  Palette.amber
+    // Hardcoded palette — reading from a separate Palette singleton
+    // was fragile (the import resolved to undefined in some Quickshell
+    // setups, leaving strokeStyle at its default of black). The hex
+    // codes here match `theme/Palette.qml`.
+    readonly property color colorPrimary: ring.offline ? "#f5c56a" : "#5dcbff"
+    readonly property color colorDeep:    ring.offline ? "#7a5a2a" : "#3aa8e8"
+    readonly property color colorSoft:    ring.offline ? "#f7d59b" : "#9fe6ff"
+    readonly property color colorAccent:  "#f5c56a"
 
     Item {
         id: stage
@@ -40,18 +45,20 @@ PanelWindow {
         width: 600
         height: 540
 
-        // ─── Layer 6 — five concentric breathing audio bands ──────────
-        // Outside everything else. One closed undulating curve per
-        // band: r(θ,t) = R_base + A · sin(n·θ + φ·t). F3a uses
-        // synthetic phases; F3b will swap them for the voice daemon's
-        // per-band level data.
+        // ─── Layer 6 — outer variable-thickness ring ──────────────────
+        // Drawn as 90 short arc segments whose lineWidth modulates with
+        // angle + a phase that animates over time. We do NOT rotate
+        // the Item — rotating a Canvas as a bitmap caused the
+        // pixelation the user reported. Instead the pattern shifts via
+        // `phase`, repainting each frame.
         Canvas {
-            id: waveform
-            anchors.fill: parent
+            id: outerVarRing
+            anchors.centerIn: parent
+            width: 240
+            height: 240
             renderStrategy: Canvas.Threaded
+            antialiasing: true
             property real phase: 0.0
-            property real amplitude: ring.agentActive ? 1.0 : 0.35
-            Behavior on amplitude { NumberAnimation { duration: 350 } }
             onPaint: {
                 var ctx = getContext("2d");
                 ctx.reset();
@@ -60,103 +67,26 @@ PanelWindow {
                 }
                 var cx = width / 2;
                 var cy = height / 2;
-                var amp = waveform.amplitude;
-                var t = waveform.phase;
-                // The bands sit outside the static ring stack (whose
-                // outermost element reaches ~118 px radius). First band
-                // at 140; outer band at 240.
-                var configs = [
-                    { color: ring.colorAccent,  width: 1.4, rBase: 140, ampMul: 7,  n: 4,  speed: 0.4 },  // bass
-                    { color: ring.colorDeep,    width: 1.2, rBase: 165, ampMul: 7,  n: 6,  speed: 0.7 },  // low-mid
-                    { color: ring.colorPrimary, width: 1.5, rBase: 190, ampMul: 8,  n: 8,  speed: 1.0 },  // mid
-                    { color: ring.colorSoft,    width: 1.0, rBase: 215, ampMul: 6,  n: 11, speed: 1.3 },  // high-mid
-                    { color: "#f7d59b",         width: 0.9, rBase: 240, ampMul: 5,  n: 14, speed: 1.7 }   // treble
-                ];
-                for (var c = 0; c < configs.length; c++) {
-                    var cfg = configs[c];
+                var r = width / 2 - 6;
+                ctx.strokeStyle = ring.colorPrimary;
+                ctx.lineCap = "round";
+                var step = 2;                // tighter step → smoother
+                var stepRad = step * Math.PI / 180;
+                for (var deg = 0; deg < 360; deg += step) {
+                    var theta = deg * Math.PI / 180;
+                    // Two thick lobes orbiting around the ring as
+                    // `phase` advances.
+                    var w = 1.0 + 4.0 * Math.abs(Math.sin(theta + outerVarRing.phase));
+                    ctx.lineWidth = w;
                     ctx.beginPath();
-                    ctx.strokeStyle = cfg.color;
-                    ctx.lineWidth = cfg.width;
-                    ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.55 : 0.7) * amp;
-                    var firstPoint = true;
-                    for (var deg = 0; deg <= 360; deg += 1) {
-                        var theta = deg * Math.PI / 180;
-                        var r = cfg.rBase
-                                + cfg.ampMul * amp
-                                  * Math.sin(cfg.n * theta + t * cfg.speed);
-                        var px = cx + r * Math.cos(theta);
-                        var py = cy + r * Math.sin(theta);
-                        if (firstPoint) {
-                            ctx.moveTo(px, py);
-                            firstPoint = false;
-                        } else {
-                            ctx.lineTo(px, py);
-                        }
-                    }
-                    ctx.closePath();
+                    ctx.arc(cx, cy, r, theta, theta + stepRad);
                     ctx.stroke();
                 }
-                ctx.globalAlpha = 1.0;
-            }
-        }
-        Timer {
-            interval: 33
-            running: !ring.offline
-            repeat: true
-            onTriggered: {
-                waveform.phase += 0.12;
-                waveform.requestPaint();
             }
         }
 
-        // ─── Layer 5 — outer variable-thickness ring ──────────────────
-        // Drawn as 90 short arc segments whose lineWidth modulates with
-        // the angle. Rotates slowly clockwise.
-        Item {
-            id: outerRingHolder
-            anchors.centerIn: parent
-            width: 240
-            height: 240
-            Canvas {
-                id: outerVarRing
-                anchors.fill: parent
-                renderStrategy: Canvas.Threaded
-                onPaint: {
-                    var ctx = getContext("2d");
-                    ctx.reset();
-                    if (ring.offline) {
-                        return;
-                    }
-                    var cx = width / 2;
-                    var cy = height / 2;
-                    var r = width / 2 - 6;
-                    ctx.strokeStyle = ring.colorPrimary;
-                    ctx.lineCap = "round";
-                    var step = 4;
-                    var stepRad = step * Math.PI / 180;
-                    for (var deg = 0; deg < 360; deg += step) {
-                        var theta = deg * Math.PI / 180;
-                        // Two thick lobes at left + right (sin of 2θ
-                        // peaks at 0/π), thinner top/bottom.
-                        var w = 1.0 + 4.0 * Math.abs(Math.sin(theta));
-                        ctx.lineWidth = w;
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, r, theta, theta + stepRad);
-                        ctx.stroke();
-                    }
-                }
-            }
-            RotationAnimation on rotation {
-                running: !ring.offline
-                from: 0; to: 360
-                duration: ring.agentActive ? 28000 : 70000
-                loops: Animation.Infinite
-            }
-        }
-
-        // ─── Layer 4 — thick arc ring with 90° gap at the top ─────────
-        // 270° solid stroke. Gap centered at 12 o'clock. Rotates so the
-        // gap orbits the orb.
+        // ─── Layer 5 — thick arc ring with 90° gap at the top ─────────
+        // Vector Shape rotates without pixelation (it's not a bitmap).
         Item {
             id: arcHolder
             anchors.centerIn: parent
@@ -174,10 +104,6 @@ PanelWindow {
                         centerY: arcHolder.height / 2
                         radiusX: arcHolder.width / 2
                         radiusY: arcHolder.height / 2
-                        // PathAngleArc 0° = 3 o'clock, sweep is CCW.
-                        // Gap centered at 12 o'clock means arc covers
-                        // from 225° to -45° going CCW = 270°.
-                        // Equivalently: start 225, sweep 270.
                         startAngle: 225
                         sweepAngle: 270
                     }
@@ -185,15 +111,16 @@ PanelWindow {
             }
             RotationAnimation on rotation {
                 running: !ring.offline
-                from: 0; to: -360       // counter-rotate vs the outer ring
+                from: 0; to: -360
                 duration: ring.agentActive ? 18000 : 45000
                 loops: Animation.Infinite
             }
         }
 
-        // ─── Layer 3 — clock-hand tick field (60 marks) ───────────────
-        // 60 ticks every 6°; cardinals (every 5th) longer. Rotates as
-        // a single field.
+        // ─── Layer 4 — clock-hand tick field (60 marks, all equal) ────
+        // 60 ticks every 6°, all the same length and color. Rotates as
+        // a single field. (Cardinals were taller before; the user
+        // wants them uniform.)
         Item {
             id: clockHands
             anchors.centerIn: parent
@@ -208,11 +135,9 @@ PanelWindow {
                     rotation: index * 6
                     Rectangle {
                         width: 1
-                        height: index % 5 === 0 ? 11 : 4
-                        color: index % 5 === 0
-                            ? ring.colorPrimary
-                            : ring.colorDeep
-                        opacity: index % 5 === 0 ? 0.95 : 0.6
+                        height: 5
+                        color: ring.colorPrimary
+                        opacity: 0.85
                         anchors.top: parent.top
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
@@ -226,47 +151,122 @@ PanelWindow {
             }
         }
 
-        // ─── Layer 2 — inner variable-thickness ring ──────────────────
-        // Same technique as the outer variable ring but smaller and
-        // with thicker lobes for visual continuity. Rotates the
-        // opposite direction so the variable thickness pattern is not
-        // identical to the outer ring's.
-        Item {
-            id: innerRingHolder
+        // ─── Layer 3 — inner variable-thickness ring ──────────────────
+        // Same phase-shift technique as the outer ring; smaller and
+        // with the lobe orbiting in the opposite direction so the two
+        // variable rings don't beat in lockstep.
+        Canvas {
+            id: innerVarRing
             anchors.centerIn: parent
             width: 130
             height: 130
-            Canvas {
-                anchors.fill: parent
-                renderStrategy: Canvas.Threaded
-                onPaint: {
-                    var ctx = getContext("2d");
-                    ctx.reset();
-                    if (ring.offline) {
-                        return;
-                    }
-                    var cx = width / 2;
-                    var cy = height / 2;
-                    var r = width / 2 - 4;
-                    ctx.strokeStyle = ring.colorPrimary;
-                    ctx.lineCap = "round";
-                    var step = 4;
-                    var stepRad = step * Math.PI / 180;
-                    for (var deg = 0; deg < 360; deg += step) {
-                        var theta = deg * Math.PI / 180;
-                        var w = 0.8 + 3.0 * Math.abs(Math.sin(theta));
-                        ctx.lineWidth = w;
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, r, theta, theta + stepRad);
-                        ctx.stroke();
-                    }
+            renderStrategy: Canvas.Threaded
+            antialiasing: true
+            property real phase: 0.0
+            onPaint: {
+                var ctx = getContext("2d");
+                ctx.reset();
+                if (ring.offline) {
+                    return;
+                }
+                var cx = width / 2;
+                var cy = height / 2;
+                var r = width / 2 - 4;
+                ctx.strokeStyle = ring.colorPrimary;
+                ctx.lineCap = "round";
+                var step = 2;
+                var stepRad = step * Math.PI / 180;
+                for (var deg = 0; deg < 360; deg += step) {
+                    var theta = deg * Math.PI / 180;
+                    // Lobe orbits opposite to the outer ring.
+                    var w = 0.8 + 3.0 * Math.abs(Math.sin(theta - innerVarRing.phase));
+                    ctx.lineWidth = w;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, theta, theta + stepRad);
+                    ctx.stroke();
                 }
             }
-            RotationAnimation on rotation {
-                running: !ring.offline
-                from: 0; to: -360
-                duration: ring.agentActive ? 25000 : 60000
-                loops: Animation.Infinite
+        }
+
+        // ─── Layer 2 — five overlapping audio bands at the same radius ─
+        // All five closed undulating curves sit at the same rBase, just
+        // inside the inner variable-thickness ring (so the bands feel
+        // like the orb's "voice"). Each band has its own n (petal
+        // count), phase speed (ω), color and amplitude — so they
+        // overlap continuously without ever drawing the same shape.
+        // F3a uses synthetic phases; F3b will swap them for the voice
+        // daemon's per-band level data.
+        Canvas {
+            id: waveform
+            anchors.centerIn: parent
+            width: 130
+            height: 130
+            renderStrategy: Canvas.Threaded
+            antialiasing: true
+            property real phase: 0.0
+            property real amplitude: ring.agentActive ? 1.0 : 0.35
+            Behavior on amplitude { NumberAnimation { duration: 350 } }
+            onPaint: {
+                var ctx = getContext("2d");
+                ctx.reset();
+                if (ring.offline) {
+                    return;
+                }
+                var cx = width / 2;
+                var cy = height / 2;
+                var amp = waveform.amplitude;
+                var t = waveform.phase;
+                // Same rBase for all five — they overlap in the same
+                // ring. Differentiation comes from n / speed / color.
+                var rBase = 52;
+                var configs = [
+                    { color: ring.colorAccent,  ampMul: 6,  n: 4,  speed: 0.4 },  // bass
+                    { color: ring.colorDeep,    ampMul: 5,  n: 6,  speed: 0.7 },  // low-mid
+                    { color: ring.colorPrimary, ampMul: 6,  n: 8,  speed: 1.0 },  // mid
+                    { color: ring.colorSoft,    ampMul: 4,  n: 11, speed: 1.3 },  // high-mid
+                    { color: "#f7d59b",         ampMul: 3,  n: 14, speed: 1.7 }   // treble
+                ];
+                for (var c = 0; c < configs.length; c++) {
+                    var cfg = configs[c];
+                    ctx.beginPath();
+                    ctx.strokeStyle = cfg.color;
+                    ctx.lineWidth = 1.2;
+                    ctx.globalAlpha = (cfg.color === ring.colorAccent ? 0.6 : 0.7) * amp;
+                    var firstPoint = true;
+                    for (var deg = 0; deg <= 360; deg += 1) {
+                        var theta = deg * Math.PI / 180;
+                        var r = rBase
+                                + cfg.ampMul * amp
+                                  * Math.sin(cfg.n * theta + t * cfg.speed);
+                        var px = cx + r * Math.cos(theta);
+                        var py = cy + r * Math.sin(theta);
+                        if (firstPoint) {
+                            ctx.moveTo(px, py);
+                            firstPoint = false;
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // Single timer drives every animated phase so all canvases stay
+        // in sync at ~30 fps.
+        Timer {
+            interval: 33
+            running: !ring.offline
+            repeat: true
+            onTriggered: {
+                waveform.phase += 0.12;
+                outerVarRing.phase += 0.025;
+                innerVarRing.phase += 0.025;
+                waveform.requestPaint();
+                outerVarRing.requestPaint();
+                innerVarRing.requestPaint();
             }
         }
 
@@ -274,34 +274,29 @@ PanelWindow {
         Item {
             id: core
             anchors.centerIn: parent
-            width: 96
-            height: 96
+            width: 80
+            height: 80
 
-            // Flat fill — deep cyan, low opacity. No gradient.
             Rectangle {
                 anchors.fill: parent
                 radius: width / 2
                 color: ring.colorDeep
-                opacity: 0.35
+                opacity: 0.4
             }
-
-            // Subtle border so the disc has a hard edge against the
-            // surrounding rings.
             Rectangle {
                 anchors.fill: parent
                 radius: width / 2
                 color: "transparent"
                 border.color: ring.colorPrimary
                 border.width: 1
-                opacity: 0.6
+                opacity: 0.7
             }
-
             Text {
                 anchors.centerIn: parent
                 text: "J.A.R.V.I.S."
                 color: ring.colorSoft
                 font.family: "monospace"
-                font.pixelSize: 11
+                font.pixelSize: 10
                 font.bold: true
                 font.letterSpacing: 0.8
             }
@@ -309,9 +304,9 @@ PanelWindow {
 
         // ─── Status text under the orb ────────────────────────────────
         Text {
-            anchors.top: core.bottom
-            anchors.topMargin: 178
-            anchors.horizontalCenter: core.horizontalCenter
+            anchors.top: stage.verticalCenter
+            anchors.topMargin: 130
+            anchors.horizontalCenter: stage.horizontalCenter
             color: ring.colorPrimary
             font.family: "monospace"
             font.pixelSize: 10
