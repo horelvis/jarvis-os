@@ -4,20 +4,36 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::stream;
+use ironclaw_common::AppEvent;
 use tokio::sync::{RwLock, mpsc};
 
-use crate::channels::{Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate};
+use crate::channels::{
+    Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate,
+    status_update_to_app_event,
+};
 use crate::error::ChannelError;
+use crate::events::EventBus;
 
 /// Manages multiple input channels and merges their message streams.
 ///
 /// Includes an injection channel so background tasks (e.g., job monitors) can
 /// push messages into the agent loop without being a full `Channel` impl.
+///
+/// Acts as the single producer of `AppEvent`s for the channel-dispatch flow:
+/// when a caller invokes `respond()` / `send_status()` / `broadcast()`, the
+/// equivalent `AppEvent` is published to the `EventBus` (when one was attached
+/// via `set_event_bus`) before delegating to the per-channel impl. This
+/// removes the need for individual channels to rebroadcast — they only need
+/// to render to their own surface.
 pub struct ChannelManager {
     channels: Arc<RwLock<HashMap<String, Arc<dyn Channel>>>>,
     inject_tx: mpsc::Sender<IncomingMessage>,
     /// Taken once in `start_all()` and merged into the stream.
     inject_rx: tokio::sync::Mutex<Option<mpsc::Receiver<IncomingMessage>>>,
+    /// Cross-channel event bus. `None` until `set_event_bus` is called from
+    /// startup. Held in an RwLock so the bus can be attached late (after the
+    /// gateway constructs its bus, or after a fresh fallback bus is made).
+    event_bus: RwLock<Option<Arc<EventBus>>>,
 }
 
 impl ChannelManager {
@@ -28,7 +44,39 @@ impl ChannelManager {
             channels: Arc::new(RwLock::new(HashMap::new())),
             inject_tx,
             inject_rx: tokio::sync::Mutex::new(Some(inject_rx)),
+            event_bus: RwLock::new(None),
         }
+    }
+
+    /// Attach the cross-channel `EventBus`. Call once during startup, before
+    /// the agent loop begins dispatching, so `respond` / `send_status` /
+    /// `broadcast` can publish to it.
+    pub async fn set_event_bus(&self, bus: Arc<EventBus>) {
+        *self.event_bus.write().await = Some(bus);
+    }
+
+    /// Publish an `AppEvent` to the event bus, scoped to a user when one is
+    /// known. No-op if the bus has not been attached yet.
+    async fn publish(&self, user_id: Option<&str>, event: AppEvent) {
+        let guard = self.event_bus.read().await;
+        let Some(bus) = guard.as_ref() else {
+            return;
+        };
+        match user_id {
+            Some(uid) => bus.broadcast_for_user(uid, event),
+            None => bus.broadcast(event),
+        }
+    }
+
+    /// Extract `user_id` and `thread_id` from a routing metadata blob. Both
+    /// are optional; missing fields broadcast globally.
+    fn extract_routing(metadata: &serde_json::Value) -> (Option<&str>, Option<String>) {
+        let user_id = metadata.get("user_id").and_then(|v| v.as_str());
+        let thread_id = metadata
+            .get("thread_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        (user_id, thread_id)
     }
 
     /// Get a clone of the injection sender.
@@ -133,11 +181,33 @@ impl ChannelManager {
     }
 
     /// Send a response to a specific channel.
+    ///
+    /// Also publishes an `AppEvent::Response` to the event bus so subscribers
+    /// (local_ipc, future TUI bus consumer, etc.) see the same response
+    /// without each channel needing to rebroadcast.
     pub async fn respond(
         &self,
         msg: &IncomingMessage,
         response: OutgoingResponse,
     ) -> Result<(), ChannelError> {
+        // Publish to the bus first so consumers see the event even if the
+        // per-channel render fails. AppEvent::Response.thread_id is a plain
+        // String — empty when the caller didn't pin one (matches how
+        // bridge::router and channels::web build it).
+        let thread_id = response
+            .thread_id
+            .as_ref()
+            .map(|t| t.as_str().to_string())
+            .unwrap_or_default();
+        self.publish(
+            Some(&msg.user_id),
+            AppEvent::Response {
+                content: response.content.clone(),
+                thread_id,
+            },
+        )
+        .await;
+
         let channels = self.channels.read().await;
         if let Some(channel) = channels.get(&msg.channel) {
             channel.respond(msg, response).await
@@ -151,14 +221,25 @@ impl ChannelManager {
 
     /// Send a status update to a specific channel.
     ///
-    /// The metadata contains channel-specific routing info (e.g., Telegram chat_id)
-    /// needed to deliver the status to the correct destination.
+    /// The metadata contains channel-specific routing info (e.g., Telegram
+    /// chat_id, `user_id`, `thread_id`) needed to deliver the status to the
+    /// correct destination.
+    ///
+    /// Also publishes the equivalent `AppEvent` to the event bus when the
+    /// status maps to one. Server-side-only status variants (e.g.,
+    /// `ThreadList`, `ConversationHistory`) are skipped — they have no wire
+    /// representation. See `channels::status_update_to_app_event`.
     pub async fn send_status(
         &self,
         channel_name: &str,
         status: StatusUpdate,
         metadata: &serde_json::Value,
     ) -> Result<(), ChannelError> {
+        let (user_id, thread_id) = Self::extract_routing(metadata);
+        if let Some(event) = status_update_to_app_event(status.clone(), thread_id) {
+            self.publish(user_id, event).await;
+        }
+
         let channels = self.channels.read().await;
         if let Some(channel) = channels.get(channel_name) {
             channel.send_status(status, metadata).await
@@ -170,13 +251,28 @@ impl ChannelManager {
 
     /// Broadcast a message to a specific user on a specific channel.
     ///
-    /// Used for proactive notifications like heartbeat alerts.
+    /// Used for proactive notifications like heartbeat alerts. Also publishes
+    /// the equivalent `AppEvent::Response` to the event bus.
     pub async fn broadcast(
         &self,
         channel_name: &str,
         user_id: &str,
         response: OutgoingResponse,
     ) -> Result<(), ChannelError> {
+        let thread_id = response
+            .thread_id
+            .as_ref()
+            .map(|t| t.as_str().to_string())
+            .unwrap_or_default();
+        self.publish(
+            Some(user_id),
+            AppEvent::Response {
+                content: response.content.clone(),
+                thread_id,
+            },
+        )
+        .await;
+
         let channels = self.channels.read().await;
         if let Some(channel) = channels.get(channel_name) {
             channel.broadcast(user_id, response).await

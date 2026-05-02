@@ -1078,6 +1078,22 @@ async fn async_main() -> anyhow::Result<()> {
         }
     }
 
+    // ── Wire the EventBus into the ChannelManager ──────────────────────
+    //
+    // By this point `sse_manager` is `Some` if either the gateway was
+    // constructed (it owns the canonical bus) or the local_ipc block created
+    // a fresh fallback. With the bus attached, `ChannelManager::send_status`
+    // / `respond` / `broadcast` publish AppEvents to subscribers — which is
+    // how engine-v1 events reach the local_ipc QML client and any future
+    // bus subscriber without each channel having to rebroadcast on its own.
+    //
+    // If neither subsystem is enabled, no bus is attached and ChannelManager
+    // publish is a no-op — TUI-only mode remains unchanged.
+    if let Some(ref bus) = sse_manager {
+        channels.set_event_bus(Arc::clone(bus)).await;
+        tracing::debug!("EventBus attached to ChannelManager");
+    }
+
     // ── Boot screen ────────────────────────────────────────────────────
 
     let boot_tool_count = components.tools.count();
