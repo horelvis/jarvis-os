@@ -189,12 +189,14 @@ PanelWindow {
                 segmentedRing(outerR, 8, 18, 7, ring.colorPrimary, 0.9, orb.spin);
 
                 // ANILLO 6 — outer ticks at outerR + 22.
-                //   • 64 ticks, length 10, line 1.6 px, rotate at half
-                //     the speed of the outer segmented ring so the two
-                //     don't move in lockstep.
-                //   • Float between ANILLO 5 (inner side, ~12 px gap)
-                //     and ANILLO 7 (outer side, ~8 px gap).
-                ticks(outerR + 22, 64, 10, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
+                //   • 64 ticks, length 11 (10% longer than before),
+                //     line 1.6 px, rotate at half the speed of the
+                //     outer segmented ring so the two don't move in
+                //     lockstep.
+                //   • Float between ANILLO 5 (inner side, ~11 px gap)
+                //     and ANILLO 7 (outer side, ~3 px gap to inner
+                //     edge of A7 at outerR+25.5).
+                ticks(outerR + 22, 64, 11, 1.6, ring.colorSoft, 0.7, orb.spin / 2, 0);
 
                 // ANILLO 7 — outermost frame ring.
                 //   • Width 18 px. To grow the doubled width *outward
