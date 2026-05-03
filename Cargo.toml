@@ -263,11 +263,6 @@ html-to-markdown = ["dep:html-to-markdown-rs", "dep:readabilityrs"]
 bedrock = ["dep:aws-config", "dep:aws-sdk-bedrockruntime", "dep:aws-smithy-types"]
 tui = ["dep:ironclaw_tui"]
 import = ["dep:json5", "libsql"]
-# Opt-in flag for F4 voice in-process migration. B1: enables
-# JARVIS_TTS_BACKEND=elevenlabs_local (subprocess wrapper). The flag is
-# kept compile-cheap by not gating any code — it just signals deployer
-# intent. Removed in B2 when in-process becomes the only path.
-voice-in-process = []
 
 [[test]]
 name = "e2e_thread_scheduling"

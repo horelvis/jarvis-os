@@ -1074,29 +1074,17 @@ async fn async_main() -> anyhow::Result<()> {
         // The pipeline subscribes to the backend's broadcast channel,
         // analyses each frame, and emits `AppEvent::AudioLevel` over
         // the same EventBus the UI orb already subscribes to.
-        // El channel local_ipc sigue necesitando un Arc<ElevenLabsIpcBackend>
-        // concreto (el shim B1 lo expone via ipc_backend()). Threading se
-        // limpia entero en B4 cuando ClientCommand::TtsPcmFrame desaparezca.
+        // ElevenlabsIpc y ElevenlabsLocal son el mismo path post-B2: el
+        // shim ElevenLabsLocalBackend arranca el VoiceEngine in-process.
+        // El alias `elevenlabs_ipc` en JARVIS_TTS_BACKEND se conserva
+        // por compat con .env existentes y se elimina en B4.
+        //
+        // local_ipc::create todavía recibe un Option<Arc<ElevenLabsIpcBackend>>
+        // por la firma legada — pasamos None hasta que B4 limpie ese param.
         let tts_backend: Option<Arc<ironclaw::audio::backends::ElevenLabsIpcBackend>> =
             match config.audio.tts_backend {
-                ironclaw::audio::TtsBackendKind::ElevenlabsIpc => {
-                    let backend = Arc::new(
-                        ironclaw::audio::backends::ElevenLabsIpcBackend::new(
-                            config.audio.frame_buffer,
-                        ),
-                    );
-                    let _pipeline_handle = ironclaw::audio::TtsAudioPipeline::spawn(
-                        backend.clone(),
-                        Arc::clone(&sse_for_local),
-                    );
-                    tracing::info!(
-                        backend = "elevenlabs_ipc",
-                        frame_buffer = config.audio.frame_buffer,
-                        "tts audio pipeline started"
-                    );
-                    Some(backend)
-                }
-                ironclaw::audio::TtsBackendKind::ElevenlabsLocal => {
+                ironclaw::audio::TtsBackendKind::ElevenlabsIpc
+                | ironclaw::audio::TtsBackendKind::ElevenlabsLocal => {
                     let shim = Arc::new(
                         ironclaw::audio::backends::ElevenLabsLocalBackend::start(
                             config.audio.frame_buffer,
@@ -1113,17 +1101,6 @@ async fn async_main() -> anyhow::Result<()> {
                         frame_buffer = config.audio.frame_buffer,
                         "tts audio pipeline started"
                     );
-                    // B2.5: el shim ya consume VoiceEvent::AgentAudio
-                    // directamente desde el orquestador in-process; no
-                    // hay un ElevenLabsIpcBackend interno que enchufar
-                    // al canal local_ipc. La firma de local_ipc::create
-                    // sigue requiriendo el Option<Arc<...>> hasta que B4
-                    // lo limpie completo — pasamos None aquí.
-                    //
-                    // Guardamos el shim en `_voice_backend_keepalive`
-                    // para que el `Drop` del VoiceHandle (que para el
-                    // orquestador y cierra el WS) NO se dispare al
-                    // salir de este bloque.
                     if let Ok(mut slot) = _voice_backend_keepalive.lock() {
                         *slot =
                             Some(shim.clone() as Arc<dyn ironclaw::audio::TtsBackend + Send + Sync>);
