@@ -20,7 +20,6 @@ pub struct AudioConfig {
     pub tts_backend: TtsBackendKind,
     /// Lag tolerance for the backend's broadcast channel. Subscribers
     /// more than this many frames behind lose the oldest entries.
-    /// See [`crate::audio::backends::ElevenLabsIpcBackend::new`].
     pub frame_buffer: usize,
 }
 
@@ -36,10 +35,11 @@ impl Default for AudioConfig {
 impl AudioConfig {
     /// Resolve from env vars.
     ///
-    /// `JARVIS_TTS_BACKEND`: `none` | `elevenlabs_ipc` (aliases:
-    /// `elevenlabs-ipc`, `elevenlabs`, `off`, `false`, `0`, empty).
-    /// Unknown values fall back to `none` rather than failing —
-    /// startup should not crash on a typoed env var.
+    /// `JARVIS_TTS_BACKEND`: `none` | `elevenlabs_local` (aliases:
+    /// `elevenlabs-local`, `elevenlabs_ipc`, `elevenlabs-ipc`,
+    /// `elevenlabs`, `voice_in_process`). Los aliases `elevenlabs*_ipc`
+    /// se conservan por compat con .env preF4 — todos mapean al
+    /// backend in-process. Unknown values fall back to `none`.
     ///
     /// `JARVIS_TTS_FRAME_BUFFER`: positive integer; falls back to
     /// [`DEFAULT_FRAME_BUFFER`] on parse error or 0.
@@ -64,10 +64,12 @@ impl AudioConfig {
     fn parse_backend(raw: &str) -> TtsBackendKind {
         match raw.trim().to_ascii_lowercase().as_str() {
             "" | "none" | "off" | "false" | "0" | "disabled" => TtsBackendKind::None,
-            "elevenlabs_ipc" | "elevenlabs-ipc" | "elevenlabs" => TtsBackendKind::ElevenlabsIpc,
-            "elevenlabs_local" | "elevenlabs-local" | "voice_in_process" => {
-                TtsBackendKind::ElevenlabsLocal
-            }
+            "elevenlabs_local"
+            | "elevenlabs-local"
+            | "elevenlabs_ipc"
+            | "elevenlabs-ipc"
+            | "elevenlabs"
+            | "voice_in_process" => TtsBackendKind::ElevenlabsLocal,
             other => {
                 tracing::warn!(
                     value = other,
@@ -88,17 +90,19 @@ mod tests {
         assert_eq!(AudioConfig::parse_backend("none"), TtsBackendKind::None);
         assert_eq!(AudioConfig::parse_backend("off"), TtsBackendKind::None);
         assert_eq!(AudioConfig::parse_backend(""), TtsBackendKind::None);
+        // Todos los aliases (incluido legacy elevenlabs_ipc) mapean al
+        // único backend in-process post-F4.
         assert_eq!(
             AudioConfig::parse_backend("elevenlabs"),
-            TtsBackendKind::ElevenlabsIpc
+            TtsBackendKind::ElevenlabsLocal
         );
         assert_eq!(
             AudioConfig::parse_backend("elevenlabs_ipc"),
-            TtsBackendKind::ElevenlabsIpc
+            TtsBackendKind::ElevenlabsLocal
         );
         assert_eq!(
             AudioConfig::parse_backend("ELEVENLABS-IPC"),
-            TtsBackendKind::ElevenlabsIpc
+            TtsBackendKind::ElevenlabsLocal
         );
     }
 

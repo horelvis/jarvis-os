@@ -20,11 +20,8 @@ use tokio::sync::broadcast;
 pub enum TtsBackendKind {
     /// TTS disabled — no `AudioLevel` events emitted, orb stays idle.
     None,
-    /// Voice daemon (`jarvis-voice-daemon`) bridging ElevenLabs Convai
-    /// over local UNIX socket IPC. Borrado en F4/B4.
-    ElevenlabsIpc,
-    /// `ElevenLabsLocalBackend` — voice engine in-process (B1: lanza el
-    /// daemon como subprocess; B2+: orquestador in-process puro).
+    /// `ElevenLabsLocalBackend` — voice engine in-process via el crate
+    /// `jarvis_voice`. Ruta única tras F4.
     ElevenlabsLocal,
     // Future:
     // PiperLocal,
@@ -36,7 +33,6 @@ impl TtsBackendKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::None => "none",
-            Self::ElevenlabsIpc => "elevenlabs_ipc",
             Self::ElevenlabsLocal => "elevenlabs_local",
         }
     }
@@ -53,13 +49,13 @@ impl TtsBackendKind {
 ///   skips frames — the audio path is never blocked.
 ///
 /// Push-side methods (e.g. `push_frame` on
-/// [`crate::audio::backends::ElevenLabsIpcBackend`]) are intentionally
+/// [`crate::audio::backends::ElevenLabsLocalBackend`]) are intentionally
 /// NOT part of the trait. Each backend chooses how it ingests audio
 /// (IPC writer, ONNX inference, file decode…) and the call sites that
 /// know how to ingest depend on the concrete type. The trait is
 /// strictly the consumer surface.
 pub trait TtsBackend: Send + Sync {
-    /// Backend identifier ("elevenlabs_ipc", "piper_local", "none"…).
+    /// Backend identifier ("elevenlabs_local", "piper_local", "none"…).
     fn name(&self) -> &str;
 
     /// Subscribe to the live PCM stream. Each subscriber gets its own

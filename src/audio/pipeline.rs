@@ -62,21 +62,46 @@ impl TtsAudioPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::backends::ElevenLabsIpcBackend;
+    use crate::audio::tts::TtsBackend;
     use crate::audio::types::PcmFrame;
+    use tokio::sync::broadcast;
     use tokio_stream::StreamExt;
+
+    /// Mock backend para tests del pipeline. No depende de IPC ni del
+    /// VoiceEngine real; expone un broadcast::Sender para que los
+    /// tests pushen frames sintéticos a la pipeline.
+    struct TestBackend {
+        tx: broadcast::Sender<PcmFrame>,
+    }
+    impl TestBackend {
+        fn new(buf: usize) -> Self {
+            let (tx, _) = broadcast::channel(buf);
+            Self { tx }
+        }
+        fn push(&self, frame: PcmFrame) {
+            let _ = self.tx.send(frame);
+        }
+    }
+    impl TtsBackend for TestBackend {
+        fn name(&self) -> &str {
+            "test"
+        }
+        fn subscribe_frames(&self) -> broadcast::Receiver<PcmFrame> {
+            self.tx.subscribe()
+        }
+    }
 
     /// A pure-tone frame fed through the pipeline produces an
     /// `AudioLevel` event on the EventBus with non-zero RMS.
     #[tokio::test]
     async fn pipeline_emits_audio_level_on_frame() {
         let event_bus = Arc::new(EventBus::new());
-        let backend = Arc::new(ElevenLabsIpcBackend::new(16));
+        let backend = Arc::new(TestBackend::new(16));
 
         // Subscribe BEFORE spawn so the test's bus subscription is
         // ready when the pipeline broadcasts. The pipeline itself
         // subscribes to the backend synchronously inside spawn(), so
-        // the first push_frame below cannot race past it.
+        // the first push below cannot race past it.
         let mut sub = event_bus
             .subscribe_raw(None, false)
             .expect("subscribe to event bus");
@@ -92,7 +117,7 @@ mod tests {
                 (amp * 32767.0) as i16
             })
             .collect();
-        backend.push_frame(PcmFrame {
+        backend.push(PcmFrame {
             samples,
             sample_rate: 16_000,
         });

@@ -218,7 +218,6 @@ use tokio::net::UnixListener;
 use tokio::sync::{Notify, mpsc};
 use tracing::{debug, warn};
 
-use crate::audio::backends::ElevenLabsIpcBackend;
 use crate::channels::IncomingMessage;
 use crate::channels::local_ipc::client::{ClientHandle, ClientMap, spawn_session};
 use crate::channels::local_ipc::protocol::ClientId;
@@ -234,10 +233,6 @@ pub struct ListenerConfig {
     pub writer_buffer: usize,
     pub clients: ClientMap,
     pub shutdown: Arc<Notify>,
-    /// Optional TTS backend that receives `ClientCommand::TtsPcmFrame`
-    /// payloads. `None` when TTS is disabled — frames are dropped
-    /// before reaching the analysis pipeline.
-    pub tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
 }
 
 /// Bind, set 0600 perms, and run accept loop until shutdown.notified.
@@ -294,12 +289,10 @@ pub async fn run_listener(
                         let inject = cfg.inject_tx.clone();
                         let user = cfg.user_id.clone();
                         let buf = cfg.writer_buffer;
-                        let tts = cfg.tts_backend.clone();
                         let cid_for_remove = client_id.clone();
                         tokio::spawn(async move {
                             let handle =
-                                spawn_session(stream, client_id, user, sse, inject, buf, tts)
-                                    .await;
+                                spawn_session(stream, client_id, user, sse, inject, buf).await;
                             register(&clients, handle).await;
                             // KNOWN-LIMITATION (v2 follow-up): spawn_session
                             // returns immediately — the reader/writer subtasks
@@ -365,7 +358,6 @@ mod listener_tests {
                     writer_buffer: DEFAULT_WRITER_BUFFER,
                     clients,
                     shutdown: sd,
-                    tts_backend: None,
                 },
             )
             .await
@@ -420,7 +412,6 @@ mod listener_tests {
                     writer_buffer: DEFAULT_WRITER_BUFFER,
                     clients,
                     shutdown: sd,
-                    tts_backend: None,
                 },
             )
             .await

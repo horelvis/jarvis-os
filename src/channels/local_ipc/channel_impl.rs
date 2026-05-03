@@ -6,7 +6,6 @@ use tokio::sync::{Mutex, Notify, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
 
-use crate::audio::backends::ElevenLabsIpcBackend;
 use crate::channels::local_ipc::client::{ClientMap, WireMessage};
 use crate::channels::local_ipc::socket::{ListenerConfig, run_listener};
 use crate::events::EventBus;
@@ -20,7 +19,6 @@ pub struct LocalIpcChannel {
     writer_buffer: usize,
     clients: ClientMap,
     shutdown: Arc<Notify>,
-    tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
 }
 
 impl LocalIpcChannel {
@@ -29,7 +27,6 @@ impl LocalIpcChannel {
         user_id: String,
         sse: Arc<EventBus>,
         writer_buffer: usize,
-        tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
     ) -> Self {
         Self {
             socket_path,
@@ -38,7 +35,6 @@ impl LocalIpcChannel {
             writer_buffer,
             clients: Arc::new(Mutex::new(Default::default())),
             shutdown: Arc::new(Notify::new()),
-            tts_backend,
         }
     }
 
@@ -81,7 +77,6 @@ impl Channel for LocalIpcChannel {
             writer_buffer: self.writer_buffer,
             clients: Arc::clone(&self.clients),
             shutdown: Arc::clone(&self.shutdown),
-            tts_backend: self.tts_backend.clone(),
         };
         let path = self.socket_path.clone();
         tokio::spawn(async move {

@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use base64::Engine as _;
 use ironclaw_common::AppEvent;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -10,8 +9,6 @@ use tokio::sync::{Mutex, mpsc};
 use tokio_stream::StreamExt;
 use tracing::{debug, warn};
 
-use crate::audio::backends::ElevenLabsIpcBackend;
-use crate::audio::types::PcmFrame;
 use crate::channels::IncomingMessage;
 use crate::channels::local_ipc::control::{ControlError, build_control_submission};
 use crate::channels::local_ipc::protocol::{
@@ -46,11 +43,6 @@ pub struct ClientHandle {
 /// ever yields. The session ends when the client closes the socket; both
 /// tasks then terminate and the caller is expected to remove the handle.
 ///
-/// `tts_backend` is `Some` when IronClaw is configured with the
-/// `elevenlabs_ipc` TTS backend — incoming `TtsPcmFrame` commands then
-/// route to its `push_frame()`. `None` when TTS is disabled (frames are
-/// silently dropped on the floor; the daemon shouldn't be sending any
-/// in that mode anyway).
 pub async fn spawn_session(
     stream: UnixStream,
     client_id: ClientId,
@@ -58,7 +50,6 @@ pub async fn spawn_session(
     sse: Arc<EventBus>,
     inject_tx: mpsc::Sender<IncomingMessage>,
     writer_buffer: usize,
-    tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
 ) -> ClientHandle {
     let (read_half, write_half) = stream.into_split();
     let (event_tx, event_rx) = mpsc::channel::<WireMessage>(writer_buffer);
@@ -80,7 +71,6 @@ pub async fn spawn_session(
             user_id,
             inject_tx,
             writer_tx_for_reader,
-            tts_backend,
         )
         .await;
         // When the reader exits (client closed the socket), the
@@ -105,7 +95,6 @@ async fn run_reader_task(
     user_id: String,
     inject_tx: mpsc::Sender<IncomingMessage>,
     error_event_tx: mpsc::Sender<WireMessage>,
-    tts_backend: Option<Arc<ElevenLabsIpcBackend>>,
 ) {
     let mut buf = BufReader::new(read_half);
     let mut line = String::new();
@@ -149,9 +138,7 @@ async fn run_reader_task(
                 continue; // silent-ok: malformed line, continue session
             }
         };
-        if let Err(e) =
-            dispatch_command(cmd, &user_id, &client_id, &inject_tx, tts_backend.as_deref()).await
-        {
+        if let Err(e) = dispatch_command(cmd, &user_id, &client_id, &inject_tx).await {
             warn!(client = %client_id, error = %e, "ipc command dispatch failed");
             emit_transport_error(
                 &error_event_tx,
@@ -169,8 +156,6 @@ enum DispatchError {
     Control(#[from] ControlError),
     #[error("inject channel closed")]
     InjectClosed,
-    #[error("tts pcm frame: {0}")]
-    InvalidTtsPcm(&'static str),
 }
 
 async fn dispatch_command(
@@ -178,7 +163,6 @@ async fn dispatch_command(
     user_id: &str,
     client_id: &ClientId,
     inject_tx: &mpsc::Sender<IncomingMessage>,
-    tts_backend: Option<&ElevenLabsIpcBackend>,
 ) -> Result<(), DispatchError> {
     match cmd {
         ClientCommand::Message { content, thread_id } => {
@@ -203,46 +187,7 @@ async fn dispatch_command(
             }
             Ok(())
         }
-        ClientCommand::TtsPcmFrame {
-            samples_b64,
-            sample_rate,
-        } => {
-            // Silently drop if the backend is None — the client (voice
-            // daemon) shouldn't be sending in that mode anyway, but if
-            // it does we don't crash the session.
-            let Some(backend) = tts_backend else {
-                debug!(client = %client_id, "tts_pcm_frame received with no backend; dropping");
-                return Ok(());
-            };
-            let samples = decode_pcm_b64(&samples_b64)
-                .map_err(|reason| DispatchError::InvalidTtsPcm(reason))?;
-            backend.push_frame(PcmFrame {
-                samples,
-                sample_rate,
-            });
-            Ok(())
-        }
     }
-}
-
-/// Decode a base64-encoded little-endian `i16` PCM payload.
-///
-/// Returns the inflated `Vec<i16>` or a static error string suitable
-/// for logging at the dispatch site. Strict about even byte length —
-/// an odd length means the producer split a sample across the
-/// boundary and the audio would be misaligned.
-fn decode_pcm_b64(b64: &str) -> Result<Vec<i16>, &'static str> {
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(b64.as_bytes())
-        .map_err(|_| "invalid base64")?;
-    if bytes.len() % 2 != 0 {
-        return Err("odd byte length");
-    }
-    let mut samples = Vec::with_capacity(bytes.len() / 2);
-    for chunk in bytes.chunks_exact(2) {
-        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
-    }
-    Ok(samples)
 }
 
 async fn run_writer_task(
@@ -381,7 +326,6 @@ mod tests {
             sse,
             inject_tx,
             DEFAULT_WRITER_BUFFER,
-            None,
         )
         .await;
 
@@ -405,7 +349,6 @@ mod tests {
             sse,
             inject_tx,
             DEFAULT_WRITER_BUFFER,
-            None,
         )
         .await;
         // Drain the hello.
@@ -435,7 +378,6 @@ mod tests {
             sse,
             inject_tx,
             DEFAULT_WRITER_BUFFER,
-            None,
         )
         .await;
         // Split the client side so we can read and write concurrently
@@ -462,51 +404,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reader_routes_tts_pcm_frame_to_backend() {
-        use crate::audio::backends::ElevenLabsIpcBackend;
-        use crate::audio::tts::TtsBackend;
-        use base64::Engine as _;
-
-        let (server, mut client) = pair_unix().await;
-        let sse = Arc::new(EventBus::new());
-        let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(8);
-        let backend = Arc::new(ElevenLabsIpcBackend::new(8));
-        // Subscribe BEFORE the dispatch runs so the broadcast doesn't
-        // race past us.
-        let mut frames = backend.subscribe_frames();
-
-        let _handle = spawn_session(
-            server,
-            ClientId::new("c-tts").unwrap(),
-            "owner".into(),
-            sse,
-            inject_tx,
-            DEFAULT_WRITER_BUFFER,
-            Some(Arc::clone(&backend)),
-        )
-        .await;
-
-        // Encode a small PCM payload [1, 2, 3] as little-endian i16
-        // base64 — same wire shape the voice daemon will produce.
-        let bytes: Vec<u8> = [1i16, 2, 3]
-            .iter()
-            .flat_map(|s| s.to_le_bytes())
-            .collect();
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let payload = format!(
-            "{{\"type\":\"tts_pcm_frame\",\"samples_b64\":\"{b64}\",\"sample_rate\":16000}}\n"
-        );
-        client.write_all(payload.as_bytes()).await.unwrap();
-
-        let frame = tokio::time::timeout(std::time::Duration::from_secs(2), frames.recv())
-            .await
-            .expect("frame within 2s")
-            .expect("backend channel closed");
-        assert_eq!(frame.samples, vec![1i16, 2, 3]);
-        assert_eq!(frame.sample_rate, 16_000);
-    }
-
-    #[tokio::test]
     async fn reader_routes_message_to_inject_tx() {
         let (server, mut client) = pair_unix().await;
         let sse = Arc::new(EventBus::new());
@@ -518,7 +415,6 @@ mod tests {
             sse,
             inject_tx,
             DEFAULT_WRITER_BUFFER,
-            None,
         )
         .await;
 

@@ -1067,54 +1067,43 @@ async fn async_main() -> anyhow::Result<()> {
 
         // ── TTS audio bus ──────────────────────────────────────────────
         //
-        // If a TTS backend is configured, instantiate it and start the
-        // analysis pipeline. The backend is the ingress point for PCM
-        // frames coming over IPC from the voice daemon (or, in the
-        // future, an in-process Piper / Kokoro engine pushing directly).
-        // The pipeline subscribes to the backend's broadcast channel,
-        // analyses each frame, and emits `AppEvent::AudioLevel` over
-        // the same EventBus the UI orb already subscribes to.
-        // ElevenlabsIpc y ElevenlabsLocal son el mismo path post-B2: el
-        // shim ElevenLabsLocalBackend arranca el VoiceEngine in-process.
-        // El alias `elevenlabs_ipc` en JARVIS_TTS_BACKEND se conserva
-        // por compat con .env existentes y se elimina en B4.
+        // El backend ElevenLabsLocalBackend arranca el VoiceEngine
+        // in-process del crate jarvis_voice y emite VoiceEvent::AgentAudio
+        // → core PcmFrame por broadcast. La TtsAudioPipeline se suscribe
+        // y emite AppEvent::AudioLevel sobre el mismo EventBus que la UI.
         //
-        // local_ipc::create todavía recibe un Option<Arc<ElevenLabsIpcBackend>>
-        // por la firma legada — pasamos None hasta que B4 limpie ese param.
-        let tts_backend: Option<Arc<ironclaw::audio::backends::ElevenLabsIpcBackend>> =
-            match config.audio.tts_backend {
-                ironclaw::audio::TtsBackendKind::ElevenlabsIpc
-                | ironclaw::audio::TtsBackendKind::ElevenlabsLocal => {
-                    let shim = Arc::new(
-                        ironclaw::audio::backends::ElevenLabsLocalBackend::start(
-                            config.audio.frame_buffer,
-                        )
-                        .await
-                        .map_err(|e| anyhow::anyhow!("elevenlabs_local backend: {e}"))?,
-                    );
-                    let _pipeline_handle = ironclaw::audio::TtsAudioPipeline::spawn(
-                        shim.clone(),
-                        Arc::clone(&sse_for_local),
-                    );
-                    tracing::info!(
-                        backend = "elevenlabs_local",
-                        frame_buffer = config.audio.frame_buffer,
-                        "tts audio pipeline started"
-                    );
-                    if let Ok(mut slot) = _voice_backend_keepalive.lock() {
-                        *slot =
-                            Some(shim.clone() as Arc<dyn ironclaw::audio::TtsBackend + Send + Sync>);
-                    }
-                    None
-                }
-                ironclaw::audio::TtsBackendKind::None => None,
-            };
+        // El shim queda guardado en `_voice_backend_keepalive` para que
+        // el Drop del VoiceHandle no se dispare al salir de este bloque
+        // — la pipeline solo guarda un broadcast::Receiver.
+        //
+        // El parser de config mapea el alias legacy `elevenlabs_ipc`
+        // (y otros) al variant `ElevenlabsLocal` único.
+        if let ironclaw::audio::TtsBackendKind::ElevenlabsLocal = config.audio.tts_backend {
+            let shim = Arc::new(
+                ironclaw::audio::backends::ElevenLabsLocalBackend::start(
+                    config.audio.frame_buffer,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("elevenlabs_local backend: {e}"))?,
+            );
+            let _pipeline_handle = ironclaw::audio::TtsAudioPipeline::spawn(
+                shim.clone(),
+                Arc::clone(&sse_for_local),
+            );
+            tracing::info!(
+                backend = "elevenlabs_local",
+                frame_buffer = config.audio.frame_buffer,
+                "tts audio pipeline started"
+            );
+            if let Ok(mut slot) = _voice_backend_keepalive.lock() {
+                *slot = Some(shim as Arc<dyn ironclaw::audio::TtsBackend + Send + Sync>);
+            }
+        }
 
         match ironclaw::channels::local_ipc::create(
             config.owner_id.clone(),
             sse_for_local,
             config.channels.local_ipc.writer_buffer,
-            tts_backend,
         )
         .await
         {
