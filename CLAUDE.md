@@ -80,6 +80,8 @@ All I/O is async with tokio. Use `Arc<T>` for shared state, `RwLock` for concurr
 
 Safety logic lives in `crates/ironclaw_safety/`, skills in `crates/ironclaw_skills/`. **Import directly from the extracted crate** (e.g. `use ironclaw_safety::SafetyLayer`, `use ironclaw_skills::SkillRegistry`). Do not use `crate::safety::` or `crate::skills::` for types that originate in extracted crates — `src/safety/mod.rs` and `src/skills/mod.rs` no longer glob-re-export. Local items defined in those modules (e.g. `crate::skills::attenuate_tools`) are fine.
 
+Voice engine in-process en `crates/jarvis_voice/`. **Import directly** con `use jarvis_voice::{VoiceEngine, VoiceHandle, VoiceConfig};`. El shim `src/audio/backends/elevenlabs_local.rs` traduce `VoiceEvent::AgentAudio` → `crate::audio::types::PcmFrame` para alimentar el `TtsAudioPipeline`.
+
 ## Project Structure
 
 ```
@@ -89,7 +91,9 @@ crates/
 ├── jarvis_system_tools/ # Adapters (procfs, D-Bus): process, journal, systemd,
 │                       #  network, polkit, btrfs. Tool impls live in
 │                       #  src/tools/builtin/jarvis_system/ (avoids dep cycle)
-└── jarvis_voice_daemon/ # Rust + cpal + tokio-tungstenite + ElevenLabs Convai cloud
+└── jarvis_voice/        # In-process voice engine — cpal + tokio-tungstenite +
+                         # ElevenLabs Convai. Public API: VoiceEngine::start →
+                         # VoiceHandle (subscribe / send_tool_result / stop).
 
 ui/                     # Quickshell QML — desktop UI for jarvis-os v0.3
 └── jarvis-os/          # shell.qml + theme/ + core/ + surfaces/ + components/ + scripts/

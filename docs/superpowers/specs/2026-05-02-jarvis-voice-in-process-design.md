@@ -4,7 +4,17 @@
 **Branch:** `jarvis-arch-os`
 **Predecessor:** F3b (closed at commit `048abc4f`)
 **Author:** Horelvis Castillo Mendoza
-**Status:** approved (pending implementation)
+**Status:** approved
+**Implementation status:** B1+B2+B4 shipped en host dev; B3 (AEC propio) y validación física en Asus pendientes.
+
+| Phase | Range | Notas |
+|---|---|---|
+| B1 | `0c5a9ef3..c5ccde2e` | scaffold + subprocess launcher placeholder + shim detrás de feature `voice-in-process` |
+| B2 | `08cb9b26..67908532` | in-process orchestrator, jarvis_voice_daemon borrado, systemd unit borrada |
+| B3 | — | DEFERRED: requiere `cmake`+`clang` en host y validación AEC en Asus. Plan completo en `docs/superpowers/plans/2026-05-03-jarvis-voice-in-process-impl.md` Tasks 3.1-3.5. |
+| B4 | `5d1370c3` | TtsPcmFrame variant borrado + threading limpio + ElevenLabsIpcBackend borrado |
+| B5 | _este commit_ | docs + memory |
+
 
 ---
 
