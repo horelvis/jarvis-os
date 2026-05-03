@@ -1,37 +1,41 @@
 //! `VoiceEngine` — punto de entrada del crate.
 //!
-//! En B1 lanza `jarvis-voice-daemon` como subprocess (ver
-//! [`crate::spawn`]). En B2 sustituye el subprocess por orquestador
-//! in-process. La superficie pública (`VoiceEngine::start` →
-//! `VoiceHandle`) es estable entre B1 y B2.
+//! `start(cfg)` arranca el orquestador in-process como tokio task y
+//! devuelve un `VoiceHandle` que permite suscribirse al stream de
+//! `VoiceEvent`, enviar `ToolCallResult` de vuelta al server, y parar
+//! el motor (drop o `stop().await`).
 
 use crate::config::VoiceConfig;
 use crate::error::VoiceError;
-use crate::spawn::DaemonChild;
+use crate::orchestrator::OrchestratorTask;
 use crate::types::{ToolCallResult, VoiceEvent};
 use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
 
-/// Capacidad del bus de eventos. Suficiente para 1s de audio en frames
-/// 50ms (~20) más eventos de control. Lagged subscribers se re-sincronizan.
-const EVENT_BUS_CAPACITY: usize = 64;
+const EVENT_BUS_CAPACITY: usize = 128;
+const TOOL_CHANNEL_CAPACITY: usize = 8;
 
 pub struct VoiceEngine;
 
 impl VoiceEngine {
-    /// Arranca el voice engine. En B1 lanza el subprocess
-    /// `jarvis-voice-daemon` y devuelve un handle que mantiene el child
-    /// vivo y permite suscribirse a `VoiceEvent` (broadcast vacío en B1
-    /// porque el daemon publica PCM por IPC, no por este bus — el shim
-    /// `ElevenLabsLocalBackend` sigue leyendo del IPC en B1).
     pub async fn start(cfg: VoiceConfig) -> Result<VoiceHandle, VoiceError> {
-        let (events_tx, _events_rx) = broadcast::channel::<VoiceEvent>(EVENT_BUS_CAPACITY);
-        let (tool_tx, _tool_rx) = mpsc::channel::<ToolCallResult>(8);
-        let child = DaemonChild::spawn(&cfg).await?;
+        let (events_tx, _) = broadcast::channel::<VoiceEvent>(EVENT_BUS_CAPACITY);
+        let (tool_tx, tool_rx) = mpsc::channel::<ToolCallResult>(TOOL_CHANNEL_CAPACITY);
+        let (stop_tx, stop_rx) = mpsc::channel::<()>(1);
+
+        let orchestrator = OrchestratorTask {
+            events_tx: events_tx.clone(),
+            tool_rx,
+            stop_rx,
+        };
+        let join: JoinHandle<Result<(), VoiceError>> =
+            tokio::spawn(async move { orchestrator.run(cfg).await });
 
         Ok(VoiceHandle {
             events_tx,
             tool_tx,
-            _child: Some(child),
+            stop_tx,
+            join: Some(join),
         })
     }
 }
@@ -39,7 +43,8 @@ impl VoiceEngine {
 pub struct VoiceHandle {
     events_tx: broadcast::Sender<VoiceEvent>,
     tool_tx: mpsc::Sender<ToolCallResult>,
-    _child: Option<DaemonChild>,
+    stop_tx: mpsc::Sender<()>,
+    join: Option<JoinHandle<Result<(), VoiceError>>>,
 }
 
 impl VoiceHandle {
@@ -54,10 +59,25 @@ impl VoiceHandle {
             .map_err(|e| VoiceError::Transport(format!("tool channel closed: {e}")))
     }
 
-    pub async fn stop(self) -> Result<(), VoiceError> {
-        if let Some(child) = self._child {
-            child.shutdown().await?;
+    pub async fn stop(mut self) -> Result<(), VoiceError> {
+        let _ = self.stop_tx.send(()).await;
+        if let Some(join) = self.join.take() {
+            match join.await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(e),
+                Err(e) => Err(VoiceError::Transport(format!("orchestrator panicked: {e}"))),
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
+    }
+}
+
+impl Drop for VoiceHandle {
+    fn drop(&mut self) {
+        // Best-effort: avisa al orquestador que pare. La task se cancela
+        // sola al cerrarse el broadcast/mpsc; no hacemos await aquí
+        // porque drop es sync.
+        let _ = self.stop_tx.try_send(());
     }
 }
