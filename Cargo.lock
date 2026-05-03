@@ -4321,12 +4321,15 @@ name = "jarvis_voice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "cpal",
+ "futures-util",
  "ringbuf",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-tungstenite 0.24.0",
  "tracing",
 ]
 

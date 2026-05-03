@@ -1,6 +1,7 @@
 //! Cliente WebSocket de ElevenLabs Conversational AI.
 
-use anyhow::{Context, Result, anyhow};
+pub mod protocol;
+
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
@@ -9,10 +10,11 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
-use crate::config::Config;
-use crate::protocol::{
+use crate::config::VoiceConfig;
+use crate::elevenlabs::protocol::{
     ClientToolResult, ConversationInitiation, Pong, ServerMessage, UserAudioChunk,
 };
+use crate::error::VoiceError;
 
 const ENDPOINT: &str = "wss://api.elevenlabs.io/v1/convai/conversation";
 const HEADER_API_KEY: &str = "xi-api-key";
@@ -43,7 +45,7 @@ pub enum Inbound {
     Ping {
         event_id: u64,
     },
-    ToolCall(crate::protocol::ClientToolCall),
+    ToolCall(crate::elevenlabs::protocol::ClientToolCall),
     Connected {
         conversation_id: String,
     },
@@ -57,23 +59,26 @@ pub struct WsClient {
 
 /// Conecta al endpoint WS y arranca dos tasks (read/write) que median
 /// con el orquestador vía canales mpsc.
-pub async fn connect(cfg: &Config) -> Result<WsClient> {
+pub async fn connect(cfg: &VoiceConfig) -> Result<WsClient, VoiceError> {
     let url = format!("{ENDPOINT}?agent_id={}", cfg.agent_id);
     let mut request = url
         .as_str()
         .into_client_request()
-        .context("building ws request")?;
+        .map_err(|e| VoiceError::Transport(format!("building ws request: {e}")))?;
     request.headers_mut().insert(
         HeaderName::from_static(HEADER_API_KEY),
-        HeaderValue::from_str(&cfg.api_key).context("api_key contains invalid header bytes")?,
+        HeaderValue::from_str(&cfg.api_key)
+            .map_err(|e| VoiceError::Transport(format!("api_key invalid header bytes: {e}")))?,
     );
 
-    tracing::info!(
+    tracing::debug!(
         agent_id = %cfg.agent_id_redacted(),
         "ws.connecting"
     );
-    let (ws, response) = connect_async(request).await.context("ws.connect_async")?;
-    tracing::info!(status = %response.status(), "ws.connected");
+    let (ws, response) = connect_async(request)
+        .await
+        .map_err(|e| VoiceError::Transport(format!("ws.connect_async: {e}")))?;
+    tracing::debug!(status = %response.status(), "ws.connected");
 
     let (outbound_tx, outbound_rx) = mpsc::channel::<Outbound>(64);
     let (inbound_tx, inbound_rx) = mpsc::channel::<Inbound>(64);
@@ -84,12 +89,13 @@ pub async fn connect(cfg: &Config) -> Result<WsClient> {
         cfg.system_prompt_override.clone(),
         cfg.dynamic_variables.clone(),
     );
-    let init_json = serde_json::to_string(&init).context("serialize init")?;
+    let init_json = serde_json::to_string(&init)
+        .map_err(|e| VoiceError::Transport(format!("serialize init: {e}")))?;
 
     let (mut sink, mut stream) = ws.split();
     sink.send(Message::Text(init_json.into()))
         .await
-        .context("send init")?;
+        .map_err(|e| VoiceError::Transport(format!("send init: {e}")))?;
 
     // Task: outbound — lee del canal y envía por el WS.
     let outbound_task = tokio::spawn(async move {
@@ -268,12 +274,15 @@ async fn handle_text(text: &str, tx: &mpsc::Sender<Inbound>) {
     }
 }
 
-fn decode_audio(b64: &str) -> Result<Vec<i16>> {
+fn decode_audio(b64: &str) -> Result<Vec<i16>, VoiceError> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(b64)
-        .context("base64 decode")?;
+        .map_err(|e| VoiceError::Transport(format!("base64 decode: {e}")))?;
     if bytes.len() % 2 != 0 {
-        return Err(anyhow!("audio bytes not aligned to i16: {}", bytes.len()));
+        return Err(VoiceError::Transport(format!(
+            "audio bytes not aligned to i16: {}",
+            bytes.len()
+        )));
     }
     let mut pcm = Vec::with_capacity(bytes.len() / 2);
     for chunk in bytes.chunks_exact(2) {

@@ -16,7 +16,9 @@ pub use types::{
     VoiceEvent,
 };
 
+mod audio_io;
 mod config;
+mod elevenlabs;
 mod engine;
 mod error;
 mod spawn;

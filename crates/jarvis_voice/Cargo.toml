@@ -17,5 +17,10 @@ anyhow = "1"
 cpal = "0.15"
 ringbuf = "0.4"
 
+# WebSocket client (B2)
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+base64 = "0.22"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
