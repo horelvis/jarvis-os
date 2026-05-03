@@ -4334,27 +4334,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jarvis_voice_daemon"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "clap",
- "cpal",
- "dotenvy",
- "futures-util",
- "reqwest",
- "ringbuf",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.24.0",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "jiter"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

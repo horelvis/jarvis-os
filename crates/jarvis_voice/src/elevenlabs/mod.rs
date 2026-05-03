@@ -39,6 +39,11 @@ pub enum Inbound {
         corrected: String,
     },
     Interruption {
+        // ElevenLabs emite un event_id correlacionable con la lista de
+        // turnos pero el orquestador no lo consume hoy. Lo retenemos
+        // por el contrato wire — futuras integraciones (logs de turn
+        // detection, métricas) pueden necesitarlo.
+        #[allow(dead_code)]
         event_id: u64,
         reason: Option<String>,
     },

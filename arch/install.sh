@@ -6,7 +6,7 @@
 #   1. Verifica que estás en Arch.
 #   2. Instala dependencias base + paru (AUR helper).
 #   3. Instala end-4 dots-hyprland (illogical-impulse) via su instalador upstream.
-#   4. Compila los crates Rust de jarvis-os (ironclaw + jarvis_voice_daemon).
+#   4. Compila el binario Rust de jarvis-os (ironclaw, voz in-process via crates/jarvis_voice).
 #   5. Instala binarios + systemd-user services.
 #   6. Configura wallpaper + secrets + ~/.ironclaw/.env.
 #   7. Configura snapper para snapshots Btrfs (rollback).
@@ -85,12 +85,11 @@ if [ ! -d "$HOME/dots-hyprland" ]; then
 fi
 
 # ─── Step 5: Compilar binarios Rust de jarvis-os ───
-log "Compilando ironclaw + jarvis_voice_daemon (release)..."
+log "Compilando ironclaw (release)..."
 log "(primer build tarda ~10-20min, hay caché incremental para próximas veces)"
 cargo build --release --bin ironclaw
-cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
-for bin in ironclaw jarvis-voice-daemon; do
+for bin in ironclaw; do
     src="$JARVIS_OS_DIR/target/release/$bin"
     if [ -f "$src" ]; then
         sudo install -Dm755 "$src" "/usr/local/bin/$bin"
@@ -158,7 +157,10 @@ if command -v matugen >/dev/null 2>&1; then
     log "  matugen regeneró la paleta Material You"
 fi
 
-# ─── Step 7a: PipeWire echo-cancel para barge-in real en jarvis-voice-daemon ───
+# ─── Step 7a: PipeWire echo-cancel (AEC) ───
+# Provee la fuente virtual jarvis-mic-aec con eco cancelado. Hasta que
+# F4/B3 cierre con AEC propio dentro de crates/jarvis_voice, este módulo
+# es necesario para que el barge-in no se auto-dispare por self-echo.
 log "Instalando módulo PipeWire echo-cancel..."
 mkdir -p "$HOME/.config/pipewire/pipewire.conf.d"
 cp "$JARVIS_OS_DIR/arch/configs/pipewire/echo-cancel.conf" \

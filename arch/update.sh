@@ -49,14 +49,13 @@ log "Branch: $(cd "$JARVIS_OS_DIR" && git branch --show-current 2>/dev/null || e
 log "Compilando crates Rust (cargo decide qué rebuild)..."
 cd "$JARVIS_OS_DIR"
 cargo build --release --bin ironclaw
-cargo build --release -p jarvis_voice_daemon --bin jarvis-voice-daemon
 
 ##############################################
 # Step 2: Reinstala binarios                 #
 ##############################################
 
 # Compara hash por binario; reinstala solo si difiere para evitar restarts innecesarios.
-for bin in ironclaw jarvis-voice-daemon; do
+for bin in ironclaw; do
     NEW_BIN="$JARVIS_OS_DIR/target/release/$bin"
     DST_BIN="/usr/local/bin/$bin"
 
@@ -179,10 +178,11 @@ fi
 # Step 5: Restart servicios afectados        #
 ##############################################
 
+# Si quedan instalaciones antiguas con la unit del daemon legacy, la
+# desactivamos — el voice engine ahora vive in-process dentro de ironclaw.
 if systemctl --user is-active jarvis-voice-daemon.service >/dev/null 2>&1; then
-    log "Restart jarvis-voice-daemon para recoger binary actualizado..."
-    systemctl --user restart jarvis-voice-daemon.service || \
-        warn "Restart falló; revisar logs con journalctl --user -u jarvis-voice-daemon"
+    log "Detectado jarvis-voice-daemon.service legacy — desactivando..."
+    systemctl --user disable --now jarvis-voice-daemon.service 2>/dev/null || true
 fi
 
 ##############################################
