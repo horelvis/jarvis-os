@@ -21,5 +21,6 @@ mod config;
 mod elevenlabs;
 mod engine;
 mod error;
+mod orchestrator;
 mod spawn;
 mod types;
