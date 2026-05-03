@@ -4321,6 +4321,8 @@ name = "jarvis_voice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cpal",
+ "ringbuf",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

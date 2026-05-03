@@ -86,39 +86,38 @@ mod tests {
         }
     }
 
+    /// Both spawn cases live in one test because they mutate the shared
+    /// process-wide env var `JARVIS_VOICE_DAEMON_BIN`. Splitting into
+    /// `#[tokio::test]`s would race under cargo's default parallel
+    /// runner — the missing-binary case can read the dummy override
+    /// from the success case mid-flight.
     #[tokio::test]
-    async fn spawn_fails_when_binary_missing() {
-        // SAFETY: env mutation in tests; serializado al ejecutarse en
-        // un único proceso (cargo test --lib serial).
+    async fn spawn_resolves_binary_from_env() {
+        let cfg = cfg_for_test();
+
+        // Case 1: missing binary → Spawn error.
+        // SAFETY: env mutation; sequential within this single test.
         unsafe {
             std::env::set_var(
                 "JARVIS_VOICE_DAEMON_BIN",
                 "/this/path/does/not/exist/jarvis-voice-daemon",
             );
         }
-        let cfg = cfg_for_test();
         let err = DaemonChild::spawn(&cfg).await.unwrap_err();
         assert!(
             matches!(err, VoiceError::Spawn(_)),
             "expected Spawn error, got {err:?}"
         );
-        unsafe {
-            std::env::remove_var("JARVIS_VOICE_DAEMON_BIN");
-        }
-    }
 
-    #[tokio::test]
-    async fn spawn_succeeds_with_dummy_binary() {
-        // /usr/bin/true existe en linux, vive un instante y exit 0. Sirve
-        // como stand-in del daemon: spawn debe tener éxito.
+        // Case 2: dummy binary (/usr/bin/true) → spawn succeeds.
         unsafe {
             std::env::set_var("JARVIS_VOICE_DAEMON_BIN", "/usr/bin/true");
         }
-        let cfg = cfg_for_test();
         let child = DaemonChild::spawn(&cfg)
             .await
             .expect("spawn must succeed against /usr/bin/true");
         child.shutdown().await.expect("shutdown must succeed");
+
         unsafe {
             std::env::remove_var("JARVIS_VOICE_DAEMON_BIN");
         }

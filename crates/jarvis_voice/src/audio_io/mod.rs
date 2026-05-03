@@ -9,7 +9,7 @@
 //! Para barge-in, el orquestador limpia el ringbuf cuando llega un
 //! evento `interruption`.
 
-use anyhow::{Context, Result, anyhow};
+use crate::error::VoiceError;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use ringbuf::{
     HeapRb,
@@ -74,7 +74,7 @@ impl SpeakerTx {
     }
 }
 
-pub fn start() -> Result<AudioIo> {
+pub fn start() -> Result<AudioIo, VoiceError> {
     let host = cpal::default_host();
 
     // ─── Input (mic) ───
@@ -84,7 +84,7 @@ pub fn start() -> Result<AudioIo> {
     let input_device = pick_input_device(&host)?;
     let input_config = input_device
         .default_input_config()
-        .context("getting default input config")?;
+        .map_err(|e| VoiceError::AudioDevice(format!("getting default input config: {e}")))?;
     tracing::info!(
         sample_rate = input_config.sample_rate().0,
         channels = input_config.channels(),
@@ -95,7 +95,9 @@ pub fn start() -> Result<AudioIo> {
 
     let (mic_tx, mic_rx) = mpsc::channel::<Vec<i16>>(64);
     let input_stream = build_input_stream(&input_device, &input_config, mic_tx)?;
-    input_stream.play().context("starting input stream")?;
+    input_stream
+        .play()
+        .map_err(|e| VoiceError::AudioDevice(format!("starting input stream: {e}")))?;
 
     // ─── Output (speaker) ───
     // Si cargamos el módulo echo-cancel, PipeWire crea sinks "passive"
@@ -107,7 +109,7 @@ pub fn start() -> Result<AudioIo> {
     let output_device = pick_output_device(&host)?;
     let output_config = output_device
         .default_output_config()
-        .context("getting default output config")?;
+        .map_err(|e| VoiceError::AudioDevice(format!("getting default output config: {e}")))?;
     tracing::info!(
         sample_rate = output_config.sample_rate().0,
         channels = output_config.channels(),
@@ -120,7 +122,9 @@ pub fn start() -> Result<AudioIo> {
     let flush_flag = Arc::new(AtomicBool::new(false));
     let output_stream =
         build_output_stream(&output_device, &output_config, cmd_rx, flush_flag.clone())?;
-    output_stream.play().context("starting output stream")?;
+    output_stream
+        .play()
+        .map_err(|e| VoiceError::AudioDevice(format!("starting output stream: {e}")))?;
 
     Ok(AudioIo {
         mic_rx,
@@ -137,7 +141,7 @@ fn build_input_stream(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
     tx: mpsc::Sender<Vec<i16>>,
-) -> Result<cpal::Stream> {
+) -> Result<cpal::Stream, VoiceError> {
     let stream_config: cpal::StreamConfig = config.config();
     let device_rate = stream_config.sample_rate.0 as f32;
     let device_channels = stream_config.channels as usize;
@@ -165,7 +169,7 @@ fn build_input_stream(
             },
             err_fn,
             None,
-        )?,
+        ).map_err(|e| VoiceError::AudioDevice(format!("build stream: {e}")))?,
         cpal::SampleFormat::I16 => device.build_input_stream(
             &stream_config,
             move |data: &[i16], _| {
@@ -180,7 +184,7 @@ fn build_input_stream(
             },
             err_fn,
             None,
-        )?,
+        ).map_err(|e| VoiceError::AudioDevice(format!("build stream: {e}")))?,
         cpal::SampleFormat::U16 => device.build_input_stream(
             &stream_config,
             move |data: &[u16], _| {
@@ -195,14 +199,18 @@ fn build_input_stream(
             },
             err_fn,
             None,
-        )?,
-        other => return Err(anyhow!("unsupported input sample format: {other:?}")),
+        ).map_err(|e| VoiceError::AudioDevice(format!("build stream: {e}")))?,
+        other => {
+            return Err(VoiceError::AudioDevice(format!(
+                "unsupported input sample format: {other:?}"
+            )));
+        }
     };
 
     Ok(stream)
 }
 
-fn pick_input_device(host: &cpal::Host) -> Result<cpal::Device> {
+fn pick_input_device(host: &cpal::Host) -> Result<cpal::Device, VoiceError> {
     use cpal::traits::HostTrait;
     if let Ok(mut devs) = host.input_devices() {
         for d in devs.by_ref() {
@@ -218,10 +226,10 @@ fn pick_input_device(host: &cpal::Host) -> Result<cpal::Device> {
         }
     }
     host.default_input_device()
-        .ok_or_else(|| anyhow!("no default audio input device"))
+        .ok_or_else(|| VoiceError::AudioDevice("no default audio input device".into()))
 }
 
-fn pick_output_device(host: &cpal::Host) -> Result<cpal::Device> {
+fn pick_output_device(host: &cpal::Host) -> Result<cpal::Device, VoiceError> {
     use cpal::traits::HostTrait;
     // Nombres de los nodos passive del módulo echo-cancel (ver
     // arch/configs/pipewire/echo-cancel.conf). Hay que evitar abrir
@@ -245,7 +253,7 @@ fn pick_output_device(host: &cpal::Host) -> Result<cpal::Device> {
     }
     // Fallback al default si no encontramos un sink alsa/bluez.
     host.default_output_device()
-        .ok_or_else(|| anyhow!("no default audio output device"))
+        .ok_or_else(|| VoiceError::AudioDevice("no default audio output device".into()))
 }
 
 trait ToI16 {
@@ -305,7 +313,7 @@ fn build_output_stream(
     config: &cpal::SupportedStreamConfig,
     mut cmd_rx: mpsc::UnboundedReceiver<SpeakerCmd>,
     flush_flag: Arc<AtomicBool>,
-) -> Result<cpal::Stream> {
+) -> Result<cpal::Stream, VoiceError> {
     let stream_config: cpal::StreamConfig = config.config();
     let device_rate = stream_config.sample_rate.0 as f32;
     let device_channels = stream_config.channels as usize;
@@ -415,7 +423,7 @@ fn build_output_stream(
             },
             err_fn,
             None,
-        )?,
+        ).map_err(|e| VoiceError::AudioDevice(format!("build stream: {e}")))?,
         cpal::SampleFormat::I16 => device.build_output_stream(
             &stream_config,
             move |out: &mut [i16], _| {
@@ -445,8 +453,12 @@ fn build_output_stream(
             },
             err_fn,
             None,
-        )?,
-        other => return Err(anyhow!("unsupported output sample format: {other:?}")),
+        ).map_err(|e| VoiceError::AudioDevice(format!("build stream: {e}")))?,
+        other => {
+            return Err(VoiceError::AudioDevice(format!(
+                "unsupported output sample format: {other:?}"
+            )));
+        }
     };
 
     Ok(stream)
