@@ -21,8 +21,11 @@ pub enum TtsBackendKind {
     /// TTS disabled — no `AudioLevel` events emitted, orb stays idle.
     None,
     /// Voice daemon (`jarvis-voice-daemon`) bridging ElevenLabs Convai
-    /// over local UNIX socket IPC. Today's only implemented backend.
+    /// over local UNIX socket IPC. Borrado en F4/B4.
     ElevenlabsIpc,
+    /// `ElevenLabsLocalBackend` — voice engine in-process (B1: lanza el
+    /// daemon como subprocess; B2+: orquestador in-process puro).
+    ElevenlabsLocal,
     // Future:
     // PiperLocal,
     // KokoroLocal,
@@ -34,6 +37,7 @@ impl TtsBackendKind {
         match self {
             Self::None => "none",
             Self::ElevenlabsIpc => "elevenlabs_ipc",
+            Self::ElevenlabsLocal => "elevenlabs_local",
         }
     }
 }

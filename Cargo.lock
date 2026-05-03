@@ -4021,6 +4021,7 @@ dependencies = [
  "ironclaw_tui",
  "jarvis_policies",
  "jarvis_system_tools",
+ "jarvis_voice",
  "json5",
  "jsonschema",
  "jsonwebtoken",
@@ -4313,6 +4314,18 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus",
+]
+
+[[package]]
+name = "jarvis_voice"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

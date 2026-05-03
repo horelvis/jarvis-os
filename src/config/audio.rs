@@ -65,6 +65,9 @@ impl AudioConfig {
         match raw.trim().to_ascii_lowercase().as_str() {
             "" | "none" | "off" | "false" | "0" | "disabled" => TtsBackendKind::None,
             "elevenlabs_ipc" | "elevenlabs-ipc" | "elevenlabs" => TtsBackendKind::ElevenlabsIpc,
+            "elevenlabs_local" | "elevenlabs-local" | "voice_in_process" => {
+                TtsBackendKind::ElevenlabsLocal
+            }
             other => {
                 tracing::warn!(
                     value = other,
@@ -96,6 +99,22 @@ mod tests {
         assert_eq!(
             AudioConfig::parse_backend("ELEVENLABS-IPC"),
             TtsBackendKind::ElevenlabsIpc
+        );
+    }
+
+    #[test]
+    fn parse_backend_recognises_local() {
+        assert_eq!(
+            AudioConfig::parse_backend("elevenlabs_local"),
+            TtsBackendKind::ElevenlabsLocal
+        );
+        assert_eq!(
+            AudioConfig::parse_backend("ELEVENLABS-LOCAL"),
+            TtsBackendKind::ElevenlabsLocal
+        );
+        assert_eq!(
+            AudioConfig::parse_backend("voice_in_process"),
+            TtsBackendKind::ElevenlabsLocal
         );
     }
 
