@@ -1045,6 +1045,16 @@ async fn async_main() -> anyhow::Result<()> {
     // `sse_tx` (set further down at the AgentDeps init) sees the same Arc
     // and feeds it. Without that assignment, local_ipc subscribers would
     // never receive AppEvents in CLI-only mode.
+    //
+    // Lifetime helper: el `ElevenLabsLocalBackend` shim envuelve el
+    // `VoiceHandle` del crate jarvis_voice; cuando muere, el orquestador
+    // se desconecta. La pipeline TTS sólo guarda un broadcast::Receiver
+    // que no mantiene vivo al sender, así que necesitamos un Arc de
+    // "keepalive" que sobreviva al bloque `if enable_non_cli` y muera
+    // sólo cuando ironclaw termina.
+    let _voice_backend_keepalive: std::sync::Mutex<
+        Option<Arc<dyn ironclaw::audio::TtsBackend + Send + Sync>>,
+    > = std::sync::Mutex::new(None);
     if enable_non_cli {
         let sse_for_local = match sse_manager.as_ref() {
             Some(existing) => Arc::clone(existing),
@@ -1103,9 +1113,22 @@ async fn async_main() -> anyhow::Result<()> {
                         frame_buffer = config.audio.frame_buffer,
                         "tts audio pipeline started"
                     );
-                    // En B1 el shim sigue exponiendo su ElevenLabsIpcBackend
-                    // interno para que local_ipc::create reciba PCM por IPC.
-                    Some(shim.ipc_backend())
+                    // B2.5: el shim ya consume VoiceEvent::AgentAudio
+                    // directamente desde el orquestador in-process; no
+                    // hay un ElevenLabsIpcBackend interno que enchufar
+                    // al canal local_ipc. La firma de local_ipc::create
+                    // sigue requiriendo el Option<Arc<...>> hasta que B4
+                    // lo limpie completo — pasamos None aquí.
+                    //
+                    // Guardamos el shim en `_voice_backend_keepalive`
+                    // para que el `Drop` del VoiceHandle (que para el
+                    // orquestador y cierra el WS) NO se dispare al
+                    // salir de este bloque.
+                    if let Ok(mut slot) = _voice_backend_keepalive.lock() {
+                        *slot =
+                            Some(shim.clone() as Arc<dyn ironclaw::audio::TtsBackend + Send + Sync>);
+                    }
+                    None
                 }
                 ironclaw::audio::TtsBackendKind::None => None,
             };
